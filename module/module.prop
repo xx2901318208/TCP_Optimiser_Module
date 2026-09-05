@@ -5,4 +5,4 @@ versionCode=18
 author=fatalcoder524
 description=TCP 优化 & 根据接口自动切换拥塞控制算法
 updateJson=https://raw.githubusercontent.com/xx2901318208/TCP_Optimiser_Module/main/update.json
-banner=https://raw.githubusercontent.com/fatalcoder524/TCP_Optimiser_Module/main/banner.png
+banner=https://raw.githubusercontent.com/xx2901318208/TCP_Optimiser_Module/main/banner.png
