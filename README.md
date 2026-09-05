@@ -1,6 +1,10 @@
 # TCP_Optimiser_Module
 一个 Magisk/KernelSU 模块，根据当前活跃的网络类型自动切换 TCP 拥塞控制算法，并提供一些网络增强功能。
 
+**原项目**: [fatalcoder524/TCP_Optimiser_Module](https://github.com/fatalcoder524/TCP_Optimiser_Module)
+
+**二改汉化**: 酷安 @R1263599071
+
 # 为什么？
 在某些内核中，TCP 拥塞控制算法 BBR 可能已经启用。或者你想根据使用的接口启用特定的算法或设置。我观察到在我的内核中，当我在 Wi-Fi 上使用 BBR 时，上传速度比 cubic 快 50-60 Mbps，但 BBR 在蜂窝网络上上传速度较差。所以我设计了这个模块，根据活跃的网络接口自动切换。
 
