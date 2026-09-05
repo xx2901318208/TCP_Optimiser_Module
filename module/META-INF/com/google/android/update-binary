@@ -25,29 +25,9 @@ ZIPFILE=$3
 
 mount /data 2>/dev/null
 
-# Detect installation environment
-if [ -f /data/adb/ksu/bin/ksud ]; then
-  # KernelSU
-  ui_print "- KernelSU detected"
-  # Use KernelSU's module installer
-  /data/adb/ksu/bin/ksud module install "$ZIPFILE"
-  exit $?
-elif [ -f /data/adb/ap/bin/apd ]; then
-  # APatch
-  ui_print "- APatch detected"
-  /data/adb/ap/bin/apd module install "$ZIPFILE"
-  exit $?
-elif [ -f /data/adb/magisk/util_functions.sh ]; then
-  # Magisk
-  ui_print "- Magisk detected"
-  . /data/adb/magisk/util_functions.sh
-  [ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
-  install_module
-  exit 0
-else
-  ui_print "*******************************"
-  ui_print " Unsupported root solution!    "
-  ui_print " Please install Magisk/KernelSU/APatch "
-  ui_print "*******************************"
-  exit 1
-fi
+[ -f /data/adb/magisk/util_functions.sh ] || [ -f /data/adb/ksu/bin/ksud ] || [ -f /data/adb/ap/bin/apd ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+
+install_module
+exit 0
