@@ -70,4 +70,63 @@
 	<div class="setting-group toggle-container">
 		<button id="force-apply" class="apply-btn">强制应用</button>
 	</div>
+
+  <div class="collapsible-group">
+    <div class="collapsible-header">
+      <h4>推荐配置</h4>
+      <span class="arrow">▼</span>
+    </div>
+    <div class="collapsible-content help-content">
+      <table class="help-table">
+        <tr><th>场景</th><th>算法</th><th>QDISC</th></tr>
+        <tr><td>Wi-Fi + 速度优先</td><td>bbr</td><td>fq</td></tr>
+        <tr><td>Wi-Fi + 稳定优先</td><td>cubic</td><td>fq_codel</td></tr>
+        <tr><td>5G 蜂窝</td><td>bbr</td><td>fq_codel</td></tr>
+        <tr><td>4G 蜂窝</td><td>cubic</td><td>fq_codel</td></tr>
+        <tr><td>游戏/低延迟</td><td>bbr</td><td>cake</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="collapsible-group">
+    <div class="collapsible-header">
+      <h4>队列调度规则 (QDISC) 说明</h4>
+      <span class="arrow">▼</span>
+    </div>
+    <div class="collapsible-content help-content">
+      <table class="help-table">
+        <tr><th>名称</th><th>说明</th></tr>
+        <tr><td>fq</td><td>公平队列，按流分配带宽，BBR 最佳搭档</td></tr>
+        <tr><td>fq_codel</td><td>公平队列+延迟控制，减少卡顿和缓冲区膨胀</td></tr>
+        <tr><td>cake</td><td>一体化队列管理，功能最全面，延迟最低</td></tr>
+        <tr><td>pfifo_fast</td><td>默认队列，简单先进先出</td></tr>
+        <tr><td>pfifo</td><td>纯先进先出队列</td></tr>
+        <tr><td>bfifo</td><td>按字节计的先进先出队列</td></tr>
+        <tr><td>htb</td><td>分层令牌桶，可精细控制带宽分配</td></tr>
+        <tr><td>tbf</td><td>令牌桶，用于限速</td></tr>
+        <tr><td>sfq</td><td>随机公平队列</td></tr>
+        <tr><td>multiq</td><td>多队列，适合多核网卡</td></tr>
+        <tr><td>prio</td><td>优先级队列，高优先级先发</td></tr>
+        <tr><td>pie</td><td>主动队列管理，控制延迟</td></tr>
+        <tr><td>fq_pie</td><td>公平队列+延迟控制</td></tr>
+        <tr><td>pfifo_head_drop</td><td>队列满时丢弃最前面的包</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="collapsible-group">
+    <div class="collapsible-header">
+      <h4>TCP 拥塞算法说明</h4>
+      <span class="arrow">▼</span>
+    </div>
+    <div class="collapsible-content help-content">
+      <table class="help-table">
+        <tr><th>名称</th><th>说明</th></tr>
+        <tr><td>bbr</td><td>Google 开发，基于带宽和延迟，Wi-Fi 上传速度快</td></tr>
+        <tr><td>bbr3</td><td>BBR 最新版，性能更优（需内核支持）</td></tr>
+        <tr><td>cubic</td><td>默认算法，兼容性最好，蜂窝网络稳定</td></tr>
+        <tr><td>reno</td><td>传统算法，已较少使用</td></tr>
+      </table>
+    </div>
+  </div>
 </div>

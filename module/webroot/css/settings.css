@@ -145,3 +145,44 @@ input:checked + .slider:before {
 .collapsible-content.collapsed {
   max-height: 0;
 }
+
+.help-content {
+  max-height: 600px;
+}
+
+.help-content.collapsed {
+  max-height: 0;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin: 4px 0;
+}
+
+.help-table th {
+  background-color: var(--card-bg);
+  color: var(--primary);
+  padding: 8px 6px;
+  text-align: left;
+  border-bottom: 1px solid #3d3d3d;
+  font-weight: 600;
+}
+
+.help-table td {
+  padding: 6px;
+  border-bottom: 1px solid #2a2a2a;
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.help-table td:first-child {
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.help-table tr:last-child td {
+  border-bottom: none;
+}
