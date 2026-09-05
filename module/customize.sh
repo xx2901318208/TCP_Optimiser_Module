@@ -1,24 +1,24 @@
 #!/system/bin/sh
 
-ui_print " [+] Starting module customization..."
+ui_print " [+] 开始模块自定义..."
 
 # Detect congestion algorithm
-ui_print " [+] Checking TCP congestion algorithm..."
+ui_print " [+] 检查 TCP 拥塞算法..."
 AVAIL_CC="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)"
-ui_print " Available CC: $AVAIL_CC"
+ui_print " 可用的拥塞控制算法: $AVAIL_CC"
 
 if echo "$AVAIL_CC" | grep -qw bbr3; then
     CONG="bbr3"
     QDISC="fq"
-    ui_print " [+] Found BBR3!"
+    ui_print " [+] 检测到 BBR3！"
 elif echo "$AVAIL_CC" | grep -qw bbr; then
     CONG="bbr"
     QDISC="fq_codel"
-    ui_print " [+] Found BBR!"
+    ui_print " [+] 检测到 BBR！"
 else
     CONG="cubic"
     QDISC="fq_codel"
-    ui_print " [+] BBR/BBR3 not found. Falling back to Cubic!"
+    ui_print " [+] 未检测到 BBR/BBR3，回退到 Cubic！"
 fi
 
 MODULE_NAME=$(basename "$MODPATH")
@@ -57,23 +57,23 @@ create_file_if_needed() {
             if [ -n "$source_file" ]; then
                 file_name=$(basename "$source_file")
                 cp "$source_file" "$MODPATH/"
-                ui_print " [+] Copied from $MODULE_PATH to $MODPATH: $file_name"
+                ui_print " [+] 已从 $MODULE_PATH 复制到 $MODPATH: $file_name"
                 
                 local remainder="${file_name#${prefix}_}"
                 if [ "$remainder" = "${remainder%_*}" ]; then
                     mv "$MODPATH/$file_name" "$MODPATH/${file_name}_${extra}"
-                    ui_print " [~] Renamed single-suffix file to: ${file_name}_${extra}"
+                    ui_print " [~] 已重命名单后缀文件为: ${file_name}_${extra}"
                 fi
             fi
         else
-            ui_print " [-] Skipping $target: file already exists."
+            ui_print " [-] 跳过 $target：文件已存在。"
             source_file=$(find "$MODULE_PATH" -name "${prefix}_*" -print -quit)
             if [ -n "$source_file" ]; then
                 file_name=$(basename "$source_file")
                 local remainder="${file_name#${prefix}_}"
                 if [ "$remainder" = "${remainder%_*}" ]; then
                     mv "$MODULE_PATH/$file_name" "$MODULE_PATH/${file_name}_${extra}"
-                    ui_print " [~] Renamed single-suffix file to: ${file_name}_${extra}"
+                    ui_print " [~] 已重命名单后缀文件为: ${file_name}_${extra}"
                 fi
             fi
         fi
@@ -82,9 +82,9 @@ create_file_if_needed() {
 
     if [ ! -f "$target" ]; then
         touch "$target"
-        ui_print " [+] Created: $target"
+        ui_print " [+] 已创建: $target"
     else
-        ui_print " [-] Skipped: $target already exists"
+        ui_print " [-] 已跳过: $target 已存在"
     fi
 }
 
@@ -101,10 +101,10 @@ if check_exists_anywhere "kill"; then
         source_file=$(find "$MODULE_PATH" -name "kill_connections" -print -quit)
         if [ -n "$source_file" ]; then
             cp "$source_file" "$MODPATH/"
-            ui_print " [+] Copied from $MODULE_PATH to $MODPATH: kill_connections"
+            ui_print " [+] 已从 $MODULE_PATH 复制到 $MODPATH: kill_connections"
         fi
     else
-        ui_print " [-] Skipping $MODPATH/kill_connections: file already exists."
+        ui_print " [-] 跳过 $MODPATH/kill_connections：文件已存在。"
     fi
 fi
 
@@ -115,10 +115,10 @@ if check_exists_anywhere "initcwnd"; then
         source_file=$(find "$MODULE_PATH" -name "initcwnd_initrwnd" -print -quit)
         if [ -n "$source_file" ]; then
             cp "$source_file" "$MODPATH/"
-            ui_print " [+] Copied from $MODULE_PATH to $MODPATH: initcwnd_initrwnd"
+            ui_print " [+] 已从 $MODULE_PATH 复制到 $MODPATH: initcwnd_initrwnd"
         fi
     else
-        ui_print " [-] Skipping $MODPATH/initcwnd_initrwnd: file already exists."
+        ui_print " [-] 跳过 $MODPATH/initcwnd_initrwnd：文件已存在。"
     fi
 fi
 

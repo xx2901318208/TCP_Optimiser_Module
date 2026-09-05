@@ -3,31 +3,31 @@ import { get_active_iface, get_active_algorithm, get_active_qdisc, getInitcwndIn
 import router_state from './router.js';
 
 export async function updateModuleStatus () {
-	var module_status = "Loading Module Status...⌛";
-	var active_iface = "None";
-	var active_iface_type = "Unknown ⁉️";
-	var active_algorithm = "Unknown ⁉️";
-	var active_qdisc = "Unknown ⁉️";
-	var wifi_calling_state = "Unknown ⁉️";
+	var module_status = "正在加载模块状态...⌛";
+	var active_iface = "无";
+	var active_iface_type = "未知 ⁉️";
+	var active_algorithm = "未知 ⁉️";
+	var active_qdisc = "未知 ⁉️";
+	var wifi_calling_state = "未知 ⁉️";
 	var active_InitcwndInitrwndValue = [];
 	try
 	{
-		module_status = (await getModuleActiveState()) == true ? "Enabled ✅" : "Disabled ❌";
+		module_status = (await getModuleActiveState()) == true ? "已启用 ✅" : "已禁用 ❌";
 		active_iface = await get_active_iface();
 		active_iface = active_iface ? active_iface : "None";
-		active_iface_type = active_iface.match("rmnet") || active_iface.match("ccmni") ? "Cellular 📶" : active_iface.startsWith("wlan") || active_iface.startsWith("tun") ? "Wi-Fi 🛜" : "Unknown ⁉️";
+		active_iface_type = active_iface.match("rmnet") || active_iface.match("ccmni") ? "蜂窝数据 📶" : active_iface.startsWith("wlan") || active_iface.startsWith("tun") ? "Wi-Fi 🛜" : "未知 ⁉️";
 		active_algorithm = await get_active_algorithm();
 		var active_qdisc_tmp = await get_active_qdisc(active_iface);
 		active_qdisc = active_qdisc_tmp ? active_qdisc_tmp : active_qdisc;
 		active_InitcwndInitrwndValue = await getInitcwndInitrwndValue();
 		if(active_iface_type == "Wi-Fi 🛜")
 		{
-			wifi_calling_state = await get_wifi_calling_state() ? "Active ": "Inactive ";
+			wifi_calling_state = await get_wifi_calling_state() ? "活跃 ": "未活跃 ";
 		}
 	} catch (error) {
 		console.error('Error updating status: ', error);
-		addLog('Error updating status.');
-		toast("Error updating status.");
+		addLog('更新状态出错。');
+		toast("更新状态出错。");
 	} finally {
 		router_state.homePageParams.module_status = module_status;
 		router_state.homePageParams.active_iface_type = active_iface_type;
@@ -42,7 +42,7 @@ export async function updateModuleStatus () {
 export function updateHomeUI () {
 	if (router_state.isInitializing == false) {
 		document.getElementById('module_status_value').textContent = router_state.homePageParams.module_status;
-		if(router_state.homePageParams.module_status == "Enabled ✅")
+		if(router_state.homePageParams.module_status == "已启用 ✅")
 		{
 			const ifaceTypeDiv = document.getElementById('active_iface_type_div');
 			const ifaceValDiv = document.getElementById('active_iface_div');
@@ -80,7 +80,7 @@ export function updateHomeUI () {
 			{
 				if (wifiCallingDiv.classList.contains('hidden'))
 					wifiCallingDiv.classList.add('hidden');
-				wifiCallingSpan.textContent = "Unknown ⁉️";
+				wifiCallingSpan.textContent = "未知 ⁉️";
 			}
 			
 			const initcwndDiv = document.getElementById('initcwnd_value_div');
@@ -99,8 +99,8 @@ export function updateHomeUI () {
 				if (initrwndDiv?.classList.contains('hidden'))
 					initrwndDiv.classList.remove('hidden');
 				
-				initcwndSpan.textContent = values.length == 2 ? values[0] : "Loading initcwnd value...";
-				initrwndSpan.textContent = values.length == 2 ? values[1] : "Loading initrwnd value...";
+				initcwndSpan.textContent = values.length == 2 ? values[0] : "正在加载 initcwnd 值...";
+				initrwndSpan.textContent = values.length == 2 ? values[1] : "正在加载 initrwnd 值...";
 			}
 			else
 			{
@@ -118,4 +118,44 @@ export function updateHomeUI () {
 export async function initHome() {
 	router_state.isInitializing = false;
 	updateHomeUI();
+	// 加载网络质量信息
+	loadNetworkQualityInfo();
+}
+
+async function loadNetworkQualityInfo() {
+	try {
+		// 获取 Android 版本
+		const { stdout: androidVersion } = await exec('getprop ro.build.version.release');
+		document.getElementById('android_version_value').textContent = androidVersion || '未知';
+		document.getElementById('android_version_div').classList.remove('hidden');
+
+		// 获取内核版本
+		const { stdout: kernelVersion } = await exec('uname -r');
+		document.getElementById('kernel_version_value').textContent = kernelVersion || '未知';
+		document.getElementById('kernel_version_div').classList.remove('hidden');
+
+		// 检测网络延迟
+		const { stdout: pingResult } = await exec('ping -c 1 -W 1 8.8.8.8 2>/dev/null | grep "time="');
+		if (pingResult) {
+			const latency = pingResult.match(/time=(\d+\.?\d*)/);
+			if (latency) {
+				document.getElementById('network_latency_value').textContent = `${latency[1]} ms`;
+				document.getElementById('network_latency_div').classList.remove('hidden');
+			}
+		}
+
+		// 检测网络抖动
+		const { stdout: jitterResult } = await exec('ping -c 5 -W 1 8.8.8.8 2>/dev/null | grep "time="');
+		if (jitterResult) {
+			const times = jitterResult.match(/time=(\d+\.?\d*)/g);
+			if (times && times.length >= 2) {
+				const values = times.map(t => parseFloat(t.split('=')[1]));
+				const jitter = Math.max(...values) - Math.min(...values);
+				document.getElementById('network_jitter_value').textContent = `${jitter.toFixed(1)} ms`;
+				document.getElementById('network_jitter_div').classList.remove('hidden');
+			}
+		}
+	} catch (error) {
+		console.error('加载网络质量信息失败:', error);
+	}
 }

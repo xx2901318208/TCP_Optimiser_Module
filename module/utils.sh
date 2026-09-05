@@ -25,6 +25,24 @@ log_print() {
 	fi
 }
 
+# 增强调试信息
+debug_print() {
+	if [ "$DEBUG_MODE" = "1" ]; then
+		log_print "[DEBUG] $1"
+	fi
+}
+
+# 记录系统信息
+log_system_info() {
+	log_print "=== 系统信息 ==="
+	log_print "Android 版本: $(getprop ro.build.version.release)"
+	log_print "内核版本: $(uname -r)"
+	log_print "设备型号: $(getprop ro.product.model)"
+	log_print "可用拥塞算法: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control)"
+	log_print "当前拥塞算法: $(cat /proc/sys/net/ipv4/tcp_congestion_control)"
+	log_print "================="
+}
+
 run_as_su() {
 	local cmd="$*"
 	su -c "$cmd"

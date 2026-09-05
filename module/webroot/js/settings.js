@@ -24,8 +24,8 @@ async function getSelectedQdisc(prefix) {
 		}
 	} catch (error) {
 		console.error('Error fetching qdiscs:', error);
-		addLog('Error fetching queuing discipline');
-		toast("Error fetching queuing discipline.");
+		addLog('获取队列调度规则出错');
+		toast("获取队列调度规则出错。");
 		return null;
 	}
 }
@@ -51,8 +51,8 @@ async function getSelectedAlgorithm(prefix) {
 		}
 	} catch (error) {
 		console.error('Error fetching algorithm:', error);
-		addLog('Error fetching congestion control algorithm');
-		toast("Error fetching congestion control algorithm.");
+		addLog('获取拥塞控制算法出错');
+		toast("获取拥塞控制算法出错。");
 		return null;
 	}
 }
@@ -119,15 +119,15 @@ const fetchAvailableAlgorithms = async (force = false) => {
 				// Split by whitespace and convert each into an object
 				router_state.available_algorithms = output.trim().split(/\s+/).map(algo => algo);
 			} else {
-				addLog('Failed to fetch congestion control algorithms');
-				toast("No congestion control algorithms found.");
+				addLog('获取拥塞控制算法失败');
+				toast("未找到拥塞控制算法。");
 			}
 		}
 		
 	} catch (error) {
 		console.error('Error fetching algorithms:', error);
-		addLog('Error fetching congestion control algorithms');
-		toast("Error fetching congestion control algorithms.");
+		addLog('获取拥塞控制算法出错');
+		toast("获取拥塞控制算法出错。");
 	}
 };
 
@@ -162,15 +162,15 @@ const fetchAvailableQdiscs = async (force = false) => {
 				}
 				router_state.available_qdiscs = qdiscs;
 			} else {
-				addLog('Failed to fetch queuing disciplines');
-				toast("No queuing disciplines found.");
+				addLog('获取队列调度规则失败');
+				toast("未找到队列调度规则。");
 			}
 		}
 		
 	} catch (error) {
 		console.error('Error fetching queuing disciplines:', error);
-		addLog('Error fetching queuing disciplines');
-		toast("Error fetching queuing disciplines.");
+		addLog('获取队列调度规则出错');
+		toast("获取队列调度规则出错。");
 	}
 };
 
@@ -229,27 +229,27 @@ export async function initSettings() {
 				await exec(`touch ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd && chmod 644 ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
 
 			console.log('Applied settings:', settings);
-			
-			router_state.settingsPageParams.wifiAlgo = settings.wifiAlgorithm;
-			router_state.settingsPageParams.wlanQdisc = settings.wifiQdisc;
-			router_state.settingsPageParams.rmnetAlgo = settings.cellularAlgorithm;
-			router_state.settingsPageParams.rmnetQdisc = settings.cellularQdisc;
-			router_state.settingsPageParams.killConnections = settings.killOnChange;
-			router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
-			toast("Settings Applied Successfully!");
-			addLog(`Applying settings: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}`);
-			return 0;
-		} catch (error) {
-			console.error('Error applying settings:', error);
-			toast("Error applying settings.");
-			return 1;
-		}
+		
+		router_state.settingsPageParams.wifiAlgo = settings.wifiAlgorithm;
+		router_state.settingsPageParams.wlanQdisc = settings.wifiQdisc;
+		router_state.settingsPageParams.rmnetAlgo = settings.cellularAlgorithm;
+		router_state.settingsPageParams.rmnetQdisc = settings.cellularQdisc;
+		router_state.settingsPageParams.killConnections = settings.killOnChange;
+		router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
+		toast("设置已成功应用！");
+		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}`);
+		return 0;
+	} catch (error) {
+		console.error('Error applying settings:', error);
+		toast("应用设置出错。");
+		return 1;
+	}
 	}
 
 	applyBtn.addEventListener('click', async () => {
 		var res = await applySettings();
 		if(res == 0)
-			toast("Turn off and on connection to apply settings.");
+			toast("请关闭并重新打开连接以应用设置。");
 	});
 	
 	forceApplyBtn.addEventListener('click', async () => {
@@ -258,7 +258,7 @@ export async function initSettings() {
 		{
 			const { errno: output } = await exec(`touch ${router_state.moduleInformation.moduleDir}/force_apply && chmod 644 ${router_state.moduleInformation.moduleDir}/force_apply`);
 			if(output == 0)
-				toast("Wait for 5s to reflect changes!");
+				toast("请等待 5 秒以生效更改！");
 		}
 	});
 	

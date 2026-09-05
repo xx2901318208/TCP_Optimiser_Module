@@ -2,7 +2,7 @@ import { exec, toast } from './kernelsu.js';
 import { formatLocalDateTime } from './common.js';
 import router_state from './router.js';
 
-const logHeadingDefaultValue = "Logs";
+const logHeadingDefaultValue = "日志";
 let prev_logs_count = 0;
 
 export async function addLog(message) {
@@ -23,8 +23,8 @@ export async function addLog(message) {
 	} catch (error)
 	{
 		console.error('Error Adding to log file: ', error);
-		addLogToScreen('Error Adding to log file.');
-		toast("Error Adding to log file.");
+		addLogToScreen('写入日志文件出错。');
+		toast("写入日志文件出错。");
 	}
 }
 
@@ -34,8 +34,8 @@ export async function read_log_file() {
 		router_state.logsList = logs.trim().split('\n').filter(line => line.length > 0);
 	} catch (error) {
 		console.error('Error reading log file: ', error);
-		addLog('Error reading log file.');
-		toast("Error reading log file.");
+		addLog('读取日志文件出错。');
+		toast("读取日志文件出错。");
 	}
 }
 
@@ -74,8 +74,8 @@ export async function initLogs() {
 		} catch (error)
 		{
 			console.error('Error clearing log file: ', error);
-			addLogToScreen('Error clearing log file.');
-			toast("Error clearing log file.");
+			addLogToScreen('清除日志文件出错。');
+			toast("清除日志文件出错。");
 		}
 	});
 	

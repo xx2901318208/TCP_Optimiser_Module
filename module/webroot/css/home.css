@@ -11,3 +11,24 @@
 .info-row.hidden {
   display: none;
 }
+
+.network-quality {
+  margin-top: 16px;
+}
+
+.network-quality .info-row {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.network-quality .info-row:last-child {
+  border-bottom: none;
+}
+
+.network-quality .label {
+  font-weight: 500;
+}
+
+.network-quality .value {
+  color: var(--text-primary);
+  font-weight: 600;
+}

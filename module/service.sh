@@ -9,6 +9,9 @@ VOWIFI_CONNECT_TIME=20
 # Get the list of available congestion control algorithms
 congestion_algorithms=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
 
+# 记录系统信息用于调试
+log_system_info
+
 CURRENT_ALGO=""
 CURRENT_QDISC=""
 
@@ -269,6 +272,7 @@ run_qdisc_watchdog() {
 	local sleep_interval="${3:-15}"
 	local target_qdisc=""
 
+	# 根据模式获取目标 qdisc
 	if [ "$mode" = "Wi-Fi" ]; then
 		for algo in $congestion_algorithms; do
 			for filepath in "$MODPATH/wlan_${algo}_"*; do
@@ -332,56 +336,55 @@ set_tcp_mem() {
 	log_print "tcp_mem set to: $low $pressure $high pages (mem_total=${mem_total_kb}KB)"
 }
 
+# 网络质量检测与自适应优化
+detect_network_quality() {
+	local iface="$1"
+	local mode="$2"
+	
+	# 获取网络延迟（ping）
+	local latency=$(ping -c 1 -W 1 8.8.8.8 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}')
+	latency=${latency:-"N/A"}
+	
+	# 根据延迟调整参数
+	if [ "$latency" != "N/A" ]; then
+		latency_int=$(echo "$latency" | cut -d'.' -f1)
+		if [ "$latency_int" -lt 50 ]; then
+			# 低延迟网络（如 5G 或光纤）
+			echo 1 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+			echo 1 > /proc/sys/net/ipv4/tcp_autocorking 2>/dev/null
+			log_print "低延迟网络检测 ($latency ms) - 启用快速打开和自动 corking"
+		elif [ "$latency_int" -lt 150 ]; then
+			# 中等延迟网络
+			echo 1 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+			log_print "中等延迟网络检测 ($latency ms) - 启用快速打开"
+		else
+			# 高延迟网络
+			echo 0 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+			log_print "高延迟网络检测 ($latency ms) - 禁用快速打开"
+		fi
+	fi
+	
+	# 获取网络抖动
+	local jitter=$(ping -c 5 -W 1 8.8.8.8 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' | awk '{if(min==""){min=max=$1}; if($1>max) max=$1; if($1<min) min=$1} END {print max-min}')
+	jitter=${jitter:-"N/A"}
+	
+	if [ "$jitter" != "N/A" ]; then
+		jitter_int=$(echo "$jitter" | cut -d'.' -f1)
+		if [ "$jitter_int" -gt 50 ]; then
+			# 高抖动网络，增加缓冲区
+			echo 16384 > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
+			echo 16384 > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
+			log_print "高抖动网络检测 ($jitter ms) - 增加 TCP 缓冲区"
+		fi
+	fi
+}
+
 # Start Run Code
 
-# IPv4 TCP optimizations
-echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
-echo "fq_codel" > /proc/sys/net/core/default_qdisc 2>/dev/null
-echo 120 > /proc/sys/net/ipv4/tcp_pacing_ca_ratio 2>/dev/null
-echo 180 > /proc/sys/net/ipv4/tcp_pacing_ss_ratio 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_window_scaling 2>/dev/null
-echo "4096 2097152 16777216" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
-echo "4096 2097152 16777216" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
-echo 16777216 > /proc/sys/net/core/rmem_max 2>/dev/null
-echo 16777216 > /proc/sys/net/core/wmem_max 2>/dev/null
-echo 4096 > /proc/sys/net/ipv4/tcp_max_syn_backlog 2>/dev/null
-echo 0 > /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null
-echo 16384 > /proc/sys/net/ipv4/tcp_notsent_lowat 2>/dev/null
-
-# IPv6 TCP tuning
-echo 1 > /proc/sys/net/ipv6/tcp_ecn 2>/dev/null
-echo "4096 2097152 16777216" > /proc/sys/net/ipv6/tcp_rmem 2>/dev/null
-echo "4096 2097152 16777216" > /proc/sys/net/ipv6/tcp_wmem 2>/dev/null
-
-# Extra settings for optimal stability
-echo 100000 > /proc/sys/net/core/netdev_max_backlog 2>/dev/null
-echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-echo 917504 > /proc/sys/net/core/rmem_default 2>/dev/null
-echo 917504 > /proc/sys/net/core/wmem_default 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_autocorking 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_fack 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_dsack 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_sack 2>/dev/null
-echo 0 > /proc/sys/net/ipv4/tcp_collapse_max_bytes 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_recovery 2>/dev/null
-
-# High-Yield Network Jitter & Continuity Tweaks
-echo 0 > /proc/sys/net/ipv4/tcp_slow_start_after_idle 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_no_metrics_save 2>/dev/null
-echo 204800 > /proc/sys/net/core/optmem_max 2>/dev/null
+# 加载共享配置并应用网络优化
+. $MODPATH/network_config.sh
+apply_network_optimizations
 set_tcp_mem
-echo 10000 > /proc/sys/net/ipv4/tcp_rto_max 2>/dev/null
-echo 2 > /proc/sys/net/ipv4/tcp_early_retrans 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_thin_linear_timeouts 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_thin_dupack 2>/dev/null
-echo 300 > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null
-echo 15 > /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null
-echo 5 > /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null
-
-# Protective Load Balancing (PLB) Real-Time Rerouting
-echo 1 > /proc/sys/net/ipv4/tcp_plb_enabled 2>/dev/null
-echo 2 > /proc/sys/net/ipv4/tcp_plb_idle_retransmit_rounds 2>/dev/null
-echo 3 > /proc/sys/net/ipv4/tcp_plb_retransmit_threshold 2>/dev/null
 
 last_mode=""
 change_time=0
@@ -417,21 +420,25 @@ while true; do
 				# Start waiting for VoWiFi
 				vowifi_pending=1
 				vowifi_start_time="$current_time"
+				# 检测网络质量并自适应优化
+				detect_network_quality "$iface" "Wi-Fi"
 			elif [ "$new_mode" = "Cellular" ]; then
 				vowifi_pending=0
 				apply_cellular_settings "$iface"
+				# 检测网络质量并自适应优化
+				detect_network_quality "$iface" "Cellular"
 
 				run_qdisc_watchdog "$iface" "Cellular" "60" &
 				WATCHDOG_PID=$!
 			elif [ "$new_mode" = "none" ]; then
                 vowifi_pending=0
-                log_print "[INFO] Interface completely disconnected (Airplane Mode / Internet Off)."
+                log_print "[INFO] 接口完全断开（飞行模式/互联网关闭）。"
             fi
 			last_mode="$new_mode"
 			change_time="$current_time"
 			rm -f "$MODPATH/force_apply"
 		else
-            log_print "[DEBUG] Network change throttled by DEBOUNCE_TIME. Retrying shortly..."
+            log_print "[DEBUG] 网络变更被防抖时间限制。稍后重试..."
         fi
 	fi
 	
@@ -440,14 +447,14 @@ while true; do
 		vowifi=$(get_wifi_calling_state)
 		vowifi=${vowifi:-1}
 		if [ "$((current_time - vowifi_start_time))" -ge "$VOWIFI_CONNECT_TIME" ]; then
-			log_print "[INFO] VoWiFi timeout reached. Applying Wi-Fi settings..."
+			log_print "[INFO] VoWiFi 超时到达。应用 Wi-Fi 设置..."
 			vowifi_pending=0
 			apply_wifi_settings "$iface"
 
 			run_qdisc_watchdog "$iface" "Wi-Fi" "30" &
 			WATCHDOG_PID=$!
 		elif [ "$vowifi" -eq 0 ]; then
-			log_print "[INFO] VoWiFi activated. Applying Wi-Fi settings..."
+			log_print "[INFO] VoWiFi 已激活。应用 Wi-Fi 设置..."
 			vowifi_pending=0
 			apply_wifi_settings "$iface"
 

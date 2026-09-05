@@ -1,22 +1,29 @@
-1. Fix multiq total_bands detection.
-2. Update service.sh timings to prevent some race conditions. [OnePlus devices]
-3. Create post-fs-data.d directory if it doesn't exist.
-4. Add support for local tc binary which supports all qdics.
-5. Fix qdisc reset in following cases:
-   - Toggle Airplane Mode.
-   - Toggle WiFi / Cellular.
-6. Add qdisc monitor to prevent netd from changing qdisc.
-7. Simplify fq_codel leaf queue for htb.
-8. Add bbr3 detection in post-fs stage.
-9. Enable full screen mode to prevent navigation bar from interfering.
-10. Add pfifo_head_drop, pie, fq_pie and cake full support.
-11. Optimize sysctl parameters for low latency, high throughput and stability.
-12. Add newly introduced PLB sysctl param support for optimisations.
-13. Reduce initrwnd max value to 20 based on RFC 6928.
-14. Set tcp_mem dynamically.
+1. 修复 multiq total_bands 检测问题。
+2. 更新 service.sh 时序以防止某些竞争条件。[OnePlus 设备]
+3. 如果 post-fs-data.d 目录不存在则创建。
+4. 添加本地 tc 二进制文件支持，支持所有 qdisc。
+5. 修复以下情况下的 qdisc 重置问题：
+   - 切换飞行模式。
+   - 切换 Wi-Fi / 蜂窝数据。
+6. 添加 qdisc 监视器以防止 netd 更改 qdisc。
+7. 简化 htb 的 fq_codel 叶子队列。
+8. 在 post-fs 阶段添加 bbr3 检测。
+9. 启用全屏模式以防止导航栏干扰。
+10. 添加 pfifo_head_drop、pie、fq_pie 和 cake 的完整支持。
+11. 优化 sysctl 参数以实现低延迟、高吞吐量和稳定性。
+12. 添加新引入的 PLB sysctl 参数支持以进行优化。
+13. 根据 RFC 6928 将 initrwnd 最大值减少到 20。
+14. 动态设置 tcp_mem。
+15. **新增**：网络质量检测 - 自动检测网络延迟和抖动，根据网络状况优化参数。
+16. **新增**：Android 17+ 支持 - 支持新内核特性（如 MPTCP、TCP 优先级等）。
+17. **新增**：智能参数调整 - 根据 Wi-Fi 频段自动调整 TCP pacing 参数。
+18. **新增**：系统信息记录 - 启动时记录系统信息，便于调试。
+19. **优化**：代码重构 - 集中管理网络配置，减少代码重复约 60 行。
+20. **优化**：WebUI - 添加网络质量显示、Android 版本和内核版本信息。
+21. **优化**：错误处理 - 增强调试信息和日志记录。
 
-Note:
-1. More qdisc tuning will be added in next version when I get more information from many users.
-2. qdisc fine-tuning currently doesn't support custom mode. Might be added in future.
-3. If your kernel supports bbr3, then please use fq / cake / fq_pie for best results.
-4. Some kernels convert bbrv1 to bbrv3 and keep the name as bbr. Even in that case use fq / cake / fq_pie instead of other qdisc.
+注意：
+1. 当我从更多用户获取更多信息后，将在下一版本中添加更多 qdisc 调优。
+2. qdisc 微调目前不支持自定义模式。未来可能会添加。
+3. 如果你的内核支持 bbr3，请使用 fq / cake / fq_pie 以获得最佳效果。
+4. 某些内核将 bbrv1 转换为 bbrv3 并保持名称为 bbr。即使在这种情况下，也请使用 fq / cake / fq_pie 而不是其他 qdisc。

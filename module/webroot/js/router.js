@@ -9,11 +9,11 @@ const router_state = {
 	moduleInformation: null,
 	isInitializing: true,
 	homePageParams: {
-		module_status: "Loading Module Status...⌛",
-		active_iface_type: "None",
-		active_iface: "Unknown ⁉️",
-		active_algorithm: "Unknown ⁉️",
-		active_qdisc: "Unknown ⁉️",
+		module_status: "正在加载模块状态...⌛",
+		active_iface_type: "无",
+		active_iface: "未知 ⁉️",
+		active_algorithm: "未知 ⁉️",
+		active_qdisc: "未知 ⁉️",
 		active_InitcwndInitrwndValue: [],
 		wifi_calling_state: false,
 	},
@@ -90,7 +90,7 @@ const realtimeUpdater = async () => {
 		}, "5000");
 	} catch (error) {
 		console.error('Error setting update loop: ', error);
-		addLog('Error setting update loop.');
+		addLog('设置更新循环出错。');
 	}
 };
 
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 					  console.error("Failed to load page script:", err);
 					  contentContainer.innerHTML = `
 					  <div style="display: flex; justify-content: center; align-items: center; height: 100%; flex-direction: column;">
-						<p>⚠️⚠️⚠️ Error loading page. ⚠️⚠️⚠️</p>
+						<p>⚠️⚠️⚠️ 页面加载出错 ⚠️⚠️⚠️</p>
 					  </div>`;
 					reject(err);
 					});
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 					console.error("Failed to load page content:", err);
 					contentContainer.innerHTML = `
 					  <div style="display: flex; justify-content: center; align-items: center; height: 100%; flex-direction: column;">
-						<p>⚠️⚠️⚠️ Error loading page. ⚠️⚠️⚠️</p>
+						<p>⚠️⚠️⚠️ 页面加载出错 ⚠️⚠️⚠️</p>
 					  </div>`;
 					reject(err);
 				  });

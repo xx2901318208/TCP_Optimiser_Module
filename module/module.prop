@@ -3,6 +3,6 @@ name=TCP Optimiser
 version=2.5
 versionCode=17
 author=fatalcoder524
-description=TCP Optimisations & update tcp_cong_algo based on interface
+description=TCP 优化 & 根据接口自动切换拥塞控制算法
 updateJson=https://raw.githubusercontent.com/fatalcoder524/TCP_Optimiser_Module/main/update.json
 banner=https://raw.githubusercontent.com/fatalcoder524/TCP_Optimiser_Module/main/banner.png

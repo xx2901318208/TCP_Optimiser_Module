@@ -30,11 +30,11 @@ export async function updateModuleInformation () {
 		}
 	}catch (error) {
 		console.error('Error updating module info:', error);
-		toast("Error fetching module info.");
+		toast("获取模块信息出错。");
 	}
 	var versionStr = router_state.moduleInformation.version ? 'v' + router_state.moduleInformation.version : '';
 	var versionCodeStr = router_state.moduleInformation.versionCode ? router_state.moduleInformation.versionCode : '';
-	var finalVersionStr = versionStr != '' && versionCodeStr != '' ? `${versionStr} (${versionCodeStr})` : "module.prop might be corrupted!"
+	var finalVersionStr = versionStr != '' && versionCodeStr != '' ? `${versionStr} (${versionCodeStr})` : "module.prop 文件可能已损坏！"
 	document.getElementById('version').textContent = finalVersionStr;
 }
 
@@ -44,7 +44,7 @@ export async function getModuleActiveState () {
 		return file_exists != "" ? true: false;
 	}catch (error) {
 		console.error('Error updating module state:', error);
-		toast("Error fetching module state.");
+		toast("获取模块状态出错。");
 	}
 }
 
@@ -54,8 +54,8 @@ export async function get_active_iface () {
 		return active_iface.trim()
 	} catch (error) {
 		console.error('Error fetching active interface: ', error);
-		addLog('Error fetching active interface.');
-		toast("Error fetching active interface.");
+		addLog('获取活跃接口出错。');
+		toast("获取活跃接口出错。");
 		return "error"
 	}
 };
@@ -65,9 +65,9 @@ export async function get_active_algorithm () {
 		const { stdout: active_algo } = await exec(`cat /proc/sys/net/ipv4/tcp_congestion_control`);
 		return active_algo.trim()
 	} catch (error) {
-		console.error('Error fetching active interface: ', error);
-		addLog('Error fetching active interface.');
-		toast("Error fetching active interface.");
+		console.error('Error fetching active algorithm: ', error);
+		addLog('获取活跃算法出错。');
+		toast("获取活跃算法出错。");
 		return "error"
 	}
 };
@@ -88,8 +88,8 @@ export async function get_active_qdisc(iface) {
 		return null;
 	} catch (error) {
 		console.error('Error fetching active qdisc: ', error);
-		addLog('Error fetching active qdisc.');
-		toast("Error fetching active qdisc.");
+		addLog('获取活跃队列规则出错。');
+		toast("获取活跃队列规则出错。");
 		return "error";
 	}
 }
@@ -100,9 +100,9 @@ export async function getInitcwndInitrwndValue () {
 		const initcwndInitrwndValues = initcwndInitrwndValueOutput.trim().split(/\s+/).filter((_, i) => i % 2 === 1);
 		return initcwndInitrwndValues;
 	} catch (error) {
-		console.error('Error fetching active interface: ', error);
-		addLog('Error fetching active interface.');
-		toast("Error fetching active interface.");
+		console.error('Error fetching initcwnd/initrwnd value: ', error);
+		addLog('获取 initcwnd/initrwnd 值出错。');
+		toast("获取 initcwnd/initrwnd 值出错。");
 		return [];
 	}
 };
@@ -126,7 +126,7 @@ export async function get_wifi_calling_state() {
     return returnCode.trim() === '0';
   } catch (error) {
     console.error('Error checking VoWiFi state:', error);
-	addLog('Error checking VoWiFi state.');
+    addLog('检查 VoWiFi 状态出错。');
     return false;
   }
 }
@@ -137,8 +137,8 @@ export async function fetchIsConfigFile (file_name) {
 		return output == "exist";
 	} catch (error) {
 		console.error('Error fetching kill connections status: ', error);
-		addLog('Error fetching kill connections status.');
-		toast("Error fetching kill connections status.");
+		addLog('获取断开连接状态出错。');
+		toast("获取断开连接状态出错。");
 		return false;
 	}
 };
