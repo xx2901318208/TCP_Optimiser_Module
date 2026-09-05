@@ -14,6 +14,9 @@ on:
         default: 1
         required: true
 
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
@@ -53,6 +56,7 @@ jobs:
           # Update the updateJson URL inside module.prop
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
           sed -i "s|^updateJson=.*|updateJson=https://raw.githubusercontent.com/${{ github.repository }}/${BRANCH_NAME}/update.json|g" module.prop
+          sed -i "s|^banner=.*|banner=https://raw.githubusercontent.com/${{ github.repository }}/${BRANCH_NAME}/banner.png|g" module.prop
           
           cat module.prop
 
@@ -74,6 +78,8 @@ jobs:
           cd ./module
           MODULE_NAME="TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}"
           zip -r "../$MODULE_NAME.zip" . -x "*.git*" -x ".github/*" -x "*.yml" -x "README.md"
+          echo "ZIP contents:"
+          unzip -l "../$MODULE_NAME.zip" | head -20
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -82,22 +88,11 @@ jobs:
           path: "*.zip"
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.new_version }}
-          release_name: ${{ env.new_version }}
-          draft: true
-          prerelease: ${{ github.ref == 'refs/heads/main' && 'false' || 'true' }}
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
-          asset_name: TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
-          asset_content_type: application/zip
+          name: v${{ env.new_version }}
+          draft: false
+          prerelease: false
+          files: TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
+          generate_release_notes: true
