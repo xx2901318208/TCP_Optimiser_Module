@@ -40,6 +40,8 @@ log_system_info() {
 	log_print "设备型号: $(getprop ro.product.model)"
 	log_print "可用拥塞算法: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control)"
 	log_print "当前拥塞算法: $(cat /proc/sys/net/ipv4/tcp_congestion_control)"
+	log_print "内存总量: $(awk '/MemTotal/{printf "%.1fGB", $2/1024/1024}' /proc/meminfo)"
+	log_print "网络接口: $(ip link show | grep -E '^[0-9]+:' | awk -F': ' '{print $2}' | tr '\n' ', ')"
 	log_print "================="
 }
 

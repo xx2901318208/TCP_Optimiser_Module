@@ -114,14 +114,14 @@ set_qdisc() {
 	sleep 2
 	local check_qdisc=$(get_active_root_qdisc "$iface" | grep "$qdisc")
 	if [ -n "$check_qdisc" ]; then
-		log_print "Applied qdisc: $qdisc ($iface)"
+		log_print "已应用队列调度规则: $qdisc ($iface)"
 		sleep 0.1
 		
 		if [ "$qdisc" = "htb" ]; then
 			run_tc class add dev "$iface" parent 1: classid 1:1 htb rate 1000mbit ceil 1000mbit 2>/dev/null
 			run_tc qdisc add dev "$iface" parent 1:1 handle 10: fq_codel ecn 2>/dev/null
 
-			log_print " [+] Attached low-latency fq_codel leaf to HTB root on $iface"
+			log_print " [+] 已在 $iface 上为 HTB 添加低延迟 fq_codel 叶子队列"
 		elif [ "$qdisc" = "multiq" ]; then
 			sleep 0.5
 			local qdisc_show=$(get_active_root_qdisc "$iface" | grep multiq)
@@ -132,7 +132,7 @@ set_qdisc() {
 			total_bands=${total_bands:-4}
 			
 			log_print " [#] $qdisc_show"
-			log_print " [~] Configuring $total_bands bands on parent $root_handle dynamically..."
+			log_print " [~] 正在配置 $total_bands 个队列通道 (父级 $root_handle)..."
 
 			local i=1
 			while [ "$i" -le "$total_bands" ]; do
@@ -141,20 +141,20 @@ set_qdisc() {
 				i=$((i + 1))
 			done
 
-			log_print " [+] Fully optimized multiq hardware lanes on $iface"
+			log_print " [+] 已优化 $iface 上的 multiq 硬件通道"
 		elif [ "$qdisc" = "prio" ]; then
 			local b=1
 			while [ "$b" -le 3 ]; do
 				run_tc qdisc add dev "$iface" parent 1:$b handle $((b + 20)): fq_codel limit 1024 target 5ms interval 100ms ecn 2>/dev/null
 				b=$((b + 1))
 			done
-			log_print " [+] Attached low-latency fq_codel leaves to all prio bands on $iface"
+			log_print " [+] 已在 $iface 上为所有 prio 队列添加低延迟 fq_codel 叶子队列"
 		fi
 
 		CURRENT_QDISC=$qdisc
 		update_description "$mode"
 	else
-		log_print "Failed to apply qdisc: $qdisc ($iface)"
+		log_print "应用队列调度规则失败: $qdisc ($iface)"
 	fi
 }
 
@@ -163,12 +163,12 @@ set_congestion() {
 	local mode="$2"
 	if echo "$congestion_algorithms" | grep -qw "$algo"; then
 		echo "$algo" > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
-		log_print "Applied congestion control: $algo ($mode)"
+		log_print "已应用拥塞控制算法: $algo ($mode)"
 		kill_tcp_connections
 		CURRENT_ALGO=$algo
 		update_description "$mode"
 	else
-		log_print "Unavailable algorithm: $algo"
+		log_print "算法不可用: $algo"
 	fi
 }
 
@@ -208,17 +208,20 @@ apply_wifi_settings() {
 	local iface="$1"
 	local applied=0
 	freq=$(get_wifi_freq "$iface")
-	log_print "Wi-Fi band detected: ${freq} MHz"
+	log_print "检测到 Wi-Fi 频段: ${freq} MHz"
 	if [ -n "$freq" ]; then
 		if [ "$freq" -lt 3000 ]; then
 			# 2.4 GHz
 			set_tcp_pacing 150 200
+			log_print " [+] 2.4GHz 频段优化已应用"
 		elif [ "$freq" -lt 6000 ]; then
 			# 5 GHz or higher
 			set_tcp_pacing 200 300
+			log_print " [+] 5GHz 频段优化已应用"
 		else
 			# 6 GHz or higher
 			set_tcp_pacing 250 350
+			log_print " [+] 6GHz 频段优化已应用"
 		fi
 	fi
 	
@@ -246,6 +249,7 @@ apply_cellular_settings() {
 	local applied=0
 	
 	set_tcp_pacing 120 200
+	log_print " [+] 蜂窝网络 pacing 参数已应用"
 	
 	for algo in $congestion_algorithms; do
 		for filepath in "$MODPATH/rmnet_data_${algo}_"*; do
@@ -297,7 +301,7 @@ run_qdisc_watchdog() {
         if [ "$mode" = "Wi-Fi" ]; then target_qdisc="htb"; else target_qdisc="multiq"; fi
     fi
     
-    log_print "[WATCHDOG] Started monitoring $watch_iface for $target_qdisc..."
+    log_print "[WATCHDOG] 开始监视 $watch_iface ($target_qdisc)..."
 
     while true; do
         local link_state=""
@@ -306,15 +310,15 @@ run_qdisc_watchdog() {
         fi
 
         if [ "$link_state" = "down" ] || [ -z "$link_state" ]; then
-            log_print "[WATCHDOG] Interface $watch_iface is inactive (state: $link_state). Stopping monitor."
+            log_print "[WATCHDOG] 接口 $watch_iface 不活跃 (状态: $link_state)。停止监视。"
             break
         fi
 
         local current_status=$(get_active_root_qdisc "$watch_iface")
         if ! echo "$current_status" | grep -q "$target_qdisc"; then
-            log_print "[!] Hijack detected on $watch_iface!"
-            log_print "[!] Current state: $(echo "$current_status" | head -n 1)"
-            log_print "[#] Re-applying $target_qdisc optimization..."
+            log_print "[!] 检测到 $watch_iface 上的队列规则被篡改！"
+            log_print "[!] 当前状态: $(echo "$current_status" | head -n 1)"
+            log_print "[#] 正在重新应用 $target_qdisc 优化..."
             
 			set_qdisc "$watch_iface" "$target_qdisc" "$mode"
 			set_max_initcwnd_initrwnd "$watch_iface"
@@ -352,15 +356,15 @@ detect_network_quality() {
 			# 低延迟网络（如 5G 或光纤）
 			echo 1 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
 			echo 1 > /proc/sys/net/ipv4/tcp_autocorking 2>/dev/null
-			log_print "低延迟网络检测 ($latency ms) - 启用快速打开和自动 corking"
+			log_print " [+] 低延迟网络检测 ($latency ms) - 启用快速打开和自动 corking"
 		elif [ "$latency_int" -lt 150 ]; then
 			# 中等延迟网络
 			echo 1 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-			log_print "中等延迟网络检测 ($latency ms) - 启用快速打开"
+			log_print " [+] 中等延迟网络检测 ($latency ms) - 启用快速打开"
 		else
 			# 高延迟网络
 			echo 0 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-			log_print "高延迟网络检测 ($latency ms) - 禁用快速打开"
+			log_print " [~] 高延迟网络检测 ($latency ms) - 禁用快速打开"
 		fi
 	fi
 	
@@ -374,7 +378,7 @@ detect_network_quality() {
 			# 高抖动网络，增加缓冲区
 			echo 16384 > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
 			echo 16384 > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
-			log_print "高抖动网络检测 ($jitter ms) - 增加 TCP 缓冲区"
+			log_print " [~] 高抖动网络检测 ($jitter ms) - 已增加 TCP 缓冲区"
 		fi
 	fi
 }
