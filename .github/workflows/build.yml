@@ -89,9 +89,15 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ env.new_version }}
           name: v${{ env.new_version }}
+          body: |
+            TCP Optimiser v${{ env.new_version }}
+            
+            中文汉化版 - 酷安 @R1263599071
           draft: false
           prerelease: false
           files: TCP_Optimiser-${{ env.new_version }}-${{ env.new_versioncode }}.zip
