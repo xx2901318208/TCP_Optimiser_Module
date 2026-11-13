@@ -72,8 +72,13 @@ export async function initAdblock() {
 			if(settings.adblockHosts)
 				touches.push(`touch ${dir}/adblock_hosts && chmod 644 ${dir}/adblock_hosts`);
 
-			if(settings.privateDns && settings.privateDns != "off")
+			if(settings.privateDns && settings.privateDns != "off") {
 				touches.push(`touch ${dir}/private_dns_${settings.privateDns} && chmod 644 ${dir}/private_dns_${settings.privateDns}`);
+				// 重新武装：去广告页点了应用，就允许 service.sh 再次写 Private DNS。
+				// （之前在系统弹框里点了关闭后，service.sh 会记住“被关掉了”
+				// 而不再自动重开；只有这里重新应用才恢复。）
+				touches.push(`touch ${dir}/dns_reapply && chmod 644 ${dir}/dns_reapply`);
+			}
 
 			if(touches.length > 0)
 				await exec(touches.join(' ; '));

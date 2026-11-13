@@ -26,7 +26,10 @@ const router_state = {
 		rmnetQdisc: null,
 		killConnections: null,
 		initcwndInitrwnd: null,
+		initcwndValue: null,
+		initrwndValue: null,
 		wifiPowersaveOff: null,
+		wifi7Unlock: null,
 	},
 	adblockPageParams: {
 		adblockHosts: null,

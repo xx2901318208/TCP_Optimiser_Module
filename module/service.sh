@@ -72,6 +72,20 @@ kill_tcp_connections() {
 set_max_initcwnd_initrwnd() {
 	local active_iface="$1"
 	if [ -f "$MODPATH/initcwnd_initrwnd" ]; then
+		# initcwnd / initrwnd 可调：标记文件 initcwnd_value / initrwnd_value
+		# 里是数字（设置页写），不存在就用默认。数字只认 1–100，超了就夹住；
+		# initrwnd 没填时按老算法算（接收缓冲 / MTU，封顶 20）。
+		local cwnd rwnd_override
+		cwnd=$(cat "$MODPATH/initcwnd_value" 2>/dev/null)
+		case "$cwnd" in
+			''|*[!0-9]*) cwnd=10 ;;
+			*) [ "${#cwnd}" -gt 3 ] && cwnd=100; [ "$cwnd" -gt 100 ] && cwnd=100; [ "$cwnd" -lt 1 ] && cwnd=1 ;;
+		esac
+		rwnd_override=$(cat "$MODPATH/initrwnd_value" 2>/dev/null)
+		case "$rwnd_override" in
+			''|*[!0-9]*) rwnd_override="" ;;
+			*) [ "${#rwnd_override}" -gt 3 ] && rwnd_override=100; [ "$rwnd_override" -gt 100 ] && rwnd_override=100; [ "$rwnd_override" -lt 1 ] && rwnd_override=1 ;;
+		esac
 		maxBufferSize=$(cat /proc/sys/net/ipv4/tcp_rmem | awk '{print $3}')
 		maxBufferSize=${maxBufferSize:-16777216}
 		mtu=$(ip link show "$active_iface" | awk '/mtu/ {print $NF}')
@@ -81,12 +95,13 @@ set_max_initcwnd_initrwnd() {
 		if [ "$maxInitrwndValue" -gt 20 ]; then
 			maxInitrwndValue=20
 		fi
+		[ -n "$rwnd_override" ] && maxInitrwndValue="$rwnd_override"
 		local applied
 		applied=0
 
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
-			run_as_su "/system/bin/ip route change $line initcwnd 10 initrwnd $maxInitrwndValue"
+			run_as_su "/system/bin/ip route change $line initcwnd $cwnd initrwnd $maxInitrwndValue"
 			[ $? -eq 0 ] && applied=1
 		done <<EOF
 $(run_as_su "/system/bin/ip route show | grep \"dev $active_iface\"")
@@ -94,14 +109,14 @@ EOF
 
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
-			run_as_su "/system/bin/ip -6 route change $line initcwnd 10 initrwnd $maxInitrwndValue"
+			run_as_su "/system/bin/ip -6 route change $line initcwnd $cwnd initrwnd $maxInitrwndValue"
 			[ $? -eq 0 ] && applied=1
 		done <<EOF
 $(run_as_su "/system/bin/ip -6 route show | grep \"dev $active_iface\"")
 EOF
 
 		if [ "$applied" -eq 1 ]; then
-			log_print "Setting initcwnd = 10; initrwnd = $maxInitrwndValue!"
+			log_print "Setting initcwnd = $cwnd; initrwnd = $maxInitrwndValue!"
 		fi
 	fi
 }
@@ -423,15 +438,104 @@ set_tcp_mem() {
 	log_print "tcp_mem set to: $low $pressure $high pages (mem_total=${mem_total_kb}KB)"
 }
 
+# Wi-Fi 6GHz / Wi-Fi 7 解锁（标记文件 wifi7_unlock，默认关闭）：
+# 解锁思路来自公开的 AndroPlus magisk-module-wifi7（v10），脚本为本模块
+# 重新编写，未直接复制其文件；它的两个 overlay APK 未采用，先看下面
+# 三件在真机上够不够，不够再从头编译等效 overlay。只做高通机型
+# （WCNSS_qcom_cfg.ini），联发科不在此列。三件：驱动 ini 去频段限制、
+# 强制 AU 国家码、OPlus 11be 开关。注意：安装/更新时 customize.sh 只
+# 准备 ini 文件，不挂载、不改 persist；挂载和 persist 改动只在开关打开
+# 后由这里做，persist 先备份、关开关时从备份恢复。
+WIFI7_INI="WCNSS_qcom_cfg.ini"
+WIFI7_ODM="/odm/vendor/etc/wifi/$WIFI7_INI"
+WIFI7_PERSIST="/mnt/vendor/persist/wlan/$WIFI7_INI"
+
+wifi7_has_6g_channels() {
+	iw phy 2>/dev/null | grep -q -E ' (59[3-9][0-9]|6[0-9][0-9][0-9]|7[01][0-9][0-9]) MHz'
+}
+
+apply_wifi7_unlock() {
+	# 开关没开：有挂载就卸掉（关掉即还原），persist 有备份就恢复
+	if [ ! -f "$MODPATH/wifi7_unlock" ]; then
+		if grep -q " $WIFI7_ODM " /proc/mounts 2>/dev/null; then
+			umount "$WIFI7_ODM" 2>/dev/null && log_print "[*] Wi-Fi 7 解锁已关闭，驱动配置挂载已卸除"
+		fi
+		if [ -f "$MODPATH/xml/$WIFI7_INI.persist.bak" ] && [ -f "$WIFI7_PERSIST" ]; then
+			cp -f "$MODPATH/xml/$WIFI7_INI.persist.bak" "$WIFI7_PERSIST" 2>/dev/null && log_print "[*] Wi-Fi 7 解锁已关闭，persist 配置已从备份恢复"
+			rm -f "$MODPATH/xml/$WIFI7_INI.persist.bak"
+		fi
+		return 0
+	fi
+	local changed=0
+	# 1. 准备改好的 ini（没有才做；customize.sh 安装时也会准备一份）
+	if [ ! -f "$MODPATH/xml/$WIFI7_INI" ]; then
+		if [ -f "$WIFI7_ODM" ]; then
+			mkdir -p "$MODPATH/xml"
+			cp -a "$WIFI7_ODM" "$MODPATH/xml/$WIFI7_INI" 2>/dev/null
+			sed -i 's@BandCapability=@#BandCapabilityMOD=@g' "$MODPATH/xml/$WIFI7_INI" 2>/dev/null
+			changed=1
+			log_print " [+] Wi-Fi 7 解锁：驱动配置已准备（BandCapability 已注释）"
+		else
+			log_print "[!] Wi-Fi 7 解锁：找不到 $WIFI7_ODM，本机可能不是高通驱动"
+			return 0
+		fi
+	fi
+	# 2. 挂载改好的 ini（已挂载就跳过）
+	if ! grep -q " $WIFI7_ODM " /proc/mounts 2>/dev/null; then
+		mount -o ro,bind "$MODPATH/xml/$WIFI7_INI" "$WIFI7_ODM" 2>/dev/null && log_print " [+] Wi-Fi 7 解锁：驱动配置已挂载"
+		changed=1
+	fi
+	# 3. persist 那份也改（只做一次：先备份，关开关时恢复）
+	if [ -f "$WIFI7_PERSIST" ] && [ ! -f "$MODPATH/xml/$WIFI7_INI.persist.bak" ]; then
+		cp -a "$WIFI7_PERSIST" "$MODPATH/xml/$WIFI7_INI.persist.bak" 2>/dev/null
+		sed -i 's@BandCapability=@#BandCapabilityMOD=@g' "$WIFI7_PERSIST" 2>/dev/null
+		sed -i 's@enable_11be=0@enable_11be=1@g' "$WIFI7_PERSIST" 2>/dev/null
+		log_print " [+] Wi-Fi 7 解锁：persist 配置已改（已备份，关开关可恢复）"
+	fi
+	# 4. 国家码强制 AU（国内 6GHz 未开放，绕开区域锁；开关默认关闭）
+	# 5. OPlus 11be 开关
+	if command -v resetprop >/dev/null 2>&1; then
+		resetprop -n ro.boot.wificountrycode AU 2>/dev/null
+		resetprop ro.oplus.wifi.11be_disabled 0 2>/dev/null
+	fi
+	if command -v iw >/dev/null 2>&1; then
+		iw reg set AU 2>/dev/null
+	fi
+	if command -v cmd >/dev/null 2>&1; then
+		cmd wifi force-country-code enabled AU 2>/dev/null
+	fi
+	# 6. 这次刚挂上/准备好 ini，但驱动还没认到 6GHz 信道时，重启一次
+	# Wi-Fi 让驱动重读配置（只在第一次做，不会每次切网都重启）
+	if [ "$changed" -eq 1 ] && ! wifi7_has_6g_channels; then
+		if [ "$(settings get global wifi_on 2>/dev/null)" != "0" ]; then
+			log_print "[*] Wi-Fi 7 解锁：未见 6GHz 信道，重启一次 Wi-Fi 重读配置"
+			cmd wifi set-wifi-enabled disabled 2>/dev/null
+			sleep 5
+			cmd wifi set-wifi-enabled enabled 2>/dev/null
+			sleep 10
+			if wifi7_has_6g_channels; then
+				log_print " [+] Wi-Fi 7 解锁：已见 6GHz 信道"
+			else
+				log_print "[!] Wi-Fi 7 解锁：重启 Wi-Fi 后仍未见 6GHz 信道（可能需要再重启一次手机）"
+			fi
+		fi
+	fi
+}
+
 # Private DNS 一键切换（标记文件 private_dns_<hostname>，没有就不碰）：
 # 模块代写系统设置 settings put global private_dns_mode/specifier，
 # 和在设置里手填是同一个设置，写完去系统设置里看会显示已配置。
 # 只在当前值和标记不一致时写；标记删掉后模块不再碰这个设置。
 # 标记文件 private_dns_default 表示“恢复系统默认”：主动把模式写回 off。
 apply_private_dns() {
-	local marker hostname current_mode current_host
+	local marker hostname current_mode current_host applied_host
 	marker=$(ls "$MODPATH"/private_dns_* 2>/dev/null | head -n1)
-	[ -z "$marker" ] && return 0
+	# 没有标记 = 不管理：同时清掉下面两处状态文件，别留脏状态。
+	# （状态文件特意不叫 private_dns_*，不然会被上面这行 ls 当成标记。）
+	if [ -z "$marker" ]; then
+		rm -f "$MODPATH/dns_applied" "$MODPATH/dns_reapply"
+		return 0
+	fi
 	command -v settings >/dev/null 2>&1 || return 0
 	if [ "$(basename "$marker")" = "private_dns_default" ]; then
 		current_mode=$(settings get global private_dns_mode 2>/dev/null)
@@ -440,6 +544,7 @@ apply_private_dns() {
 			settings delete global private_dns_specifier 2>/dev/null
 			log_print " [+] Private DNS 已恢复系统默认"
 		fi
+		rm -f "$MODPATH/dns_applied" "$MODPATH/dns_reapply"
 		return 0
 	fi
 	hostname=$(basename "$marker")
@@ -451,6 +556,17 @@ apply_private_dns() {
 		# 以前这里直接 return，日志里什么都不剩，看不出是“已经生效”
 		# 还是“标记根本不存在”。记一行，诊断时能分清。
 		log_print "[*] Private DNS 已是 $hostname，不用改"
+		[ "$(cat "$MODPATH/dns_applied" 2>/dev/null)" != "$hostname" ] && echo "$hostname" > "$MODPATH/dns_applied" 2>/dev/null
+		return 0
+	fi
+	# 需要改写，但这个主机名之前是我们写上的、后来被系统/用户关掉了
+	# （比如严格模式连不上服务器，系统弹框点了关闭）：不要自动重开，
+	# 否则开机就写回去、弹框、点了关闭又写回去，无限循环。
+	# 只有去广告页点了“应用”（会写 dns_reapply）或换了新的主机名，
+	# 才重新写。
+	applied_host=$(cat "$MODPATH/dns_applied" 2>/dev/null)
+	if [ "$applied_host" = "$hostname" ] && [ ! -f "$MODPATH/dns_reapply" ]; then
+		log_print "[*] Private DNS $hostname 已被系统/用户关闭，不再自动重开（去广告页点应用可重新开启）"
 		return 0
 	fi
 	settings put global private_dns_mode hostname 2>/dev/null
@@ -461,6 +577,8 @@ apply_private_dns() {
 	current_host=$(settings get global private_dns_specifier 2>/dev/null)
 	if [ "$current_mode" = "hostname" ] && [ "$current_host" = "$hostname" ]; then
 		log_print " [+] Private DNS 已设为 $hostname"
+		echo "$hostname" > "$MODPATH/dns_applied" 2>/dev/null
+		rm -f "$MODPATH/dns_reapply"
 	else
 		log_print "[!] Private DNS 写入失败（当前 mode=$current_mode host=$current_host）"
 	fi
@@ -556,6 +674,8 @@ while true; do
 			apply_private_dns
 			# hosts 去广告同样和接口无关
 			apply_hosts_block
+			# Wi-Fi 7 解锁同样和接口无关（有标记才做，没标记是还原）
+			apply_wifi7_unlock
 			
 			if [ -n "$WATCHDOG_PID" ]; then
 				kill "$WATCHDOG_PID" 2>/dev/null

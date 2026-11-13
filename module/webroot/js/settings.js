@@ -195,9 +195,15 @@ export async function initSettings() {
 	const cellularQdisc = document.getElementById('cellular-qdisc');
 	const killConnections = document.getElementById('kill-connections');
 	const initcwndInitrwnd = document.getElementById('initcwnd-initrwnd');
+	const initcwndValue = document.getElementById('initcwnd-value');
+	const initrwndValue = document.getElementById('initrwnd-value');
 	const wifiPowersaveOff = document.getElementById('wifi-powersave-off');
+	const wifi7Unlock = document.getElementById('wifi7-unlock');
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
+
+	// 数字框只认 1–100，超了就夹住，不是数字就回默认值
+	const clampValue = (v, def) => { const n = parseInt(v, 10); if(isNaN(n)) return def; return Math.min(100, Math.max(1, n)); };
 	
 	// 打开设置页一共只跑 3 个 shell 命令：一次 ls 拿回目录列表、
 	// 读可用算法、读可用队列。3 个标记文件和 4 个下拉框的当前值
@@ -219,6 +225,19 @@ export async function initSettings() {
 	if(router_state.settingsPageParams.wifiPowersaveOff == null)
 		router_state.settingsPageParams.wifiPowersaveOff = listing.includes("wifi_powersave_off");
 
+	if(router_state.settingsPageParams.wifi7Unlock == null)
+		router_state.settingsPageParams.wifi7Unlock = listing.includes("wifi7_unlock");
+
+	// initcwnd / initrwnd 的值存在两个文件里，一次 cat 读回来；
+	// 不存在就是默认 10 / 20。
+	if(router_state.settingsPageParams.initcwndValue == null || router_state.settingsPageParams.initrwndValue == null) {
+		const dir = (router_state.moduleInformation && router_state.moduleInformation.moduleDir) || '/data/adb/modules/tcp_optimiser';
+		const { stdout: cwndOut } = await exec(`cat ${dir}/initcwnd_value 2>/dev/null; echo; cat ${dir}/initrwnd_value 2>/dev/null`);
+		const lines = (cwndOut || '').split('\n');
+		router_state.settingsPageParams.initcwndValue = clampValue(lines[0], 10);
+		router_state.settingsPageParams.initrwndValue = clampValue(lines[1], 20);
+	}
+
 	await Promise.all([
 		populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo", listing),
 		populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc", listing),
@@ -228,6 +247,14 @@ export async function initSettings() {
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;
 	wifiPowersaveOff.checked = router_state.settingsPageParams.wifiPowersaveOff;
+	initcwndValue.value = router_state.settingsPageParams.initcwndValue;
+	initrwndValue.value = router_state.settingsPageParams.initrwndValue;
+	wifi7Unlock.checked = router_state.settingsPageParams.wifi7Unlock;
+
+	// 数字框只在 initcwnd 开关打开时能填
+	const syncInitcwndInputs = () => { initcwndValue.disabled = !initcwndInitrwnd.checked; initrwndValue.disabled = !initcwndInitrwnd.checked; };
+	initcwndInitrwnd.addEventListener('change', syncInitcwndInputs);
+	syncInitcwndInputs();
 
 	async function applySettings() {
 		const settings = {
@@ -237,7 +264,10 @@ export async function initSettings() {
 			cellularQdisc: cellularQdisc.value,
 			killOnChange: killConnections.checked,
 			setInitcwndInitrwndOnChange: initcwndInitrwnd.checked,
+			initcwndValue: clampValue(initcwndValue.value, 10),
+			initrwndValue: clampValue(initrwndValue.value, 20),
 			wifiPowersaveOff: wifiPowersaveOff.checked,
+			wifi7Unlock: wifi7Unlock.checked,
 		};
 		
 		try
@@ -245,7 +275,7 @@ export async function initSettings() {
 			// 原先这里十几个 shell 命令一个接一个等，点应用也要卡几秒。
 			// 合并成两条命令：一条删旧标记，一条写新标记。
 			const dir = router_state.moduleInformation.moduleDir;
-			await exec(`rm -f ${dir}/wlan_* ${dir}/rmnet_data_* ${dir}/kill_connections ${dir}/initcwnd_initrwnd ${dir}/wifi_powersave_off`);
+			await exec(`rm -f ${dir}/wlan_* ${dir}/rmnet_data_* ${dir}/kill_connections ${dir}/initcwnd_initrwnd ${dir}/initcwnd_value ${dir}/initrwnd_value ${dir}/wifi_powersave_off ${dir}/wifi7_unlock`);
 
 			const touches = [];
 			touches.push(`touch ${dir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${dir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
@@ -253,11 +283,22 @@ export async function initSettings() {
 			if(settings.killOnChange)
 				touches.push(`touch ${dir}/kill_connections && chmod 644 ${dir}/kill_connections`);
 
-			if(settings.setInitcwndInitrwndOnChange)
+			if(settings.setInitcwndInitrwndOnChange) {
 				touches.push(`touch ${dir}/initcwnd_initrwnd && chmod 644 ${dir}/initcwnd_initrwnd`);
+				touches.push(`echo ${settings.initcwndValue} > ${dir}/initcwnd_value && chmod 644 ${dir}/initcwnd_value`);
+				touches.push(`echo ${settings.initrwndValue} > ${dir}/initrwnd_value && chmod 644 ${dir}/initrwnd_value`);
+			}
 
 			if(settings.wifiPowersaveOff)
 				touches.push(`touch ${dir}/wifi_powersave_off && chmod 644 ${dir}/wifi_powersave_off`);
+
+			if(settings.wifi7Unlock)
+				touches.push(`touch ${dir}/wifi7_unlock && chmod 644 ${dir}/wifi7_unlock`);
+
+			// wifi7 开关变了就顺手 force_apply，让 service.sh 5 秒内就处理
+			// （挂载/卸除），不用等下次切网
+			if(settings.wifi7Unlock !== router_state.settingsPageParams.wifi7Unlock)
+				touches.push(`touch ${dir}/force_apply && chmod 644 ${dir}/force_apply`);
 
 			if(touches.length > 0)
 				await exec(touches.join(' ; '));
@@ -270,9 +311,12 @@ export async function initSettings() {
 		router_state.settingsPageParams.rmnetQdisc = settings.cellularQdisc;
 		router_state.settingsPageParams.killConnections = settings.killOnChange;
 		router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
+		router_state.settingsPageParams.initcwndValue = settings.initcwndValue;
+		router_state.settingsPageParams.initrwndValue = settings.initrwndValue;
 		router_state.settingsPageParams.wifiPowersaveOff = settings.wifiPowersaveOff;
+		router_state.settingsPageParams.wifi7Unlock = settings.wifi7Unlock;
 		toast("设置已成功应用！");
-		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}, wifi_powersave_off=${settings.wifiPowersaveOff}`);
+		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange} (initcwnd=${settings.initcwndValue}, initrwnd=${settings.initrwndValue}), wifi_powersave_off=${settings.wifiPowersaveOff}, wifi7_unlock=${settings.wifi7Unlock}`);
 		return 0;
 	} catch (error) {
 		console.error('Error applying settings:', error);

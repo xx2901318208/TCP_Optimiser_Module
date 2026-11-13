@@ -61,6 +61,30 @@
 		</label>
 	  </div>
 
+	  <div class="setting-group" id="initcwnd-values">
+		<div class="setting-row">
+		  <label for="initcwnd-value">initcwnd（初始拥塞窗口）</label>
+		  <input type="number" id="initcwnd-value" class="number-input" min="1" max="100" value="10">
+		</div>
+		<div class="setting-row">
+		  <label for="initrwnd-value">initrwnd（初始接收窗口）</label>
+		  <input type="number" id="initrwnd-value" class="number-input" min="1" max="100" value="20">
+		</div>
+		<p class="help-text">initcwnd 是 TCP 连接一开始不用等确认就能发多少个包，initrwnd 是对方一开始能发多少个包。值越大，新连接起步越快（打开网页、加载图片少等几轮），但突发流量也越大，弱网或拥堵时更容易丢包重传。默认 10 / 20 是兼顾速度和稳定的值；Wi-Fi 好时可适当调大，蜂窝弱信号时建议调小。只在上面开关打开时生效。</p>
+	  </div>
+
+	  <div class="setting-group toggle-container">
+		<label id="wifi7-unlock-label" for="wifi7-unlock">解锁 Wi-Fi 6GHz / Wi-Fi 7</label>
+		<label class="toggle">
+		  <input type="checkbox" id="wifi7-unlock">
+		  <span class="slider"></span>
+		</label>
+	  </div>
+
+	  <div class="setting-group">
+		<p class="help-text">解锁后手机能用 6GHz 频段和 Wi-Fi 7（需路由器支持）。改高通驱动配置并强制 AU 国家码（国内 6GHz 未开放，慎用）。KernelSU 下重启两次才生效；开启后若仍未见 6GHz，开关一次 Wi-Fi 或再重启一次。关掉开关会卸除挂载并从备份恢复 persist 配置。</p>
+	  </div>
+
 	  <div class="setting-group toggle-container">
 		<label id="wifi-powersave-off-label" for="wifi-powersave-off">关闭 Wi-Fi 省电（低延迟，费电）</label>
 		<label class="toggle">

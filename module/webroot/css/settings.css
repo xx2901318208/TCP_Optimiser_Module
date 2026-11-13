@@ -14,7 +14,7 @@
   flex: 1;
 }
 
-#kill-connections-label, #initcwnd-initrwnd-label, #wifi-powersave-off-label {
+#kill-connections-label, #initcwnd-initrwnd-label, #wifi-powersave-off-label, #wifi7-unlock-label {
   color: var(--text-secondary);
 }
 
@@ -33,6 +33,33 @@
 .dropdown:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+.number-input {
+  width: 90px;
+  padding: 8px 12px;
+  background-color: var(--card-bg);
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.number-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.number-input:disabled {
+  opacity: 0.45;
+}
+
+.help-text {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 .dropdown option {

@@ -118,9 +118,39 @@ if check_exists_anywhere "initcwnd"; then
             cp "$source_file" "$MODPATH/"
             ui_print " [+] 已从 $MODULE_PATH 复制到 $MODPATH: initcwnd_initrwnd"
         fi
+        # initcwnd / initrwnd 的数值文件也一起保留（设置页写的两个数字）
+        for value_file in initcwnd_value initrwnd_value; do
+            source_file=$(find "$MODULE_PATH" -name "$value_file" -print -quit)
+            if [ -n "$source_file" ]; then
+                cp "$source_file" "$MODPATH/"
+                ui_print " [+] 已从 $MODULE_PATH 复制到 $MODPATH: $value_file"
+            fi
+        done
     else
         ui_print " [-] 跳过 $MODPATH/initcwnd_initrwnd：文件已存在。"
     fi
+fi
+
+# Wi-Fi 7 解锁：更新/重装时保留开关（标记文件）
+if check_exists_anywhere "wifi7_unlock"; then
+    if [ "$KSU" = true ]; then
+        source_file=$(find "$MODULE_PATH" -name "wifi7_unlock" -print -quit)
+        if [ -n "$source_file" ]; then
+            cp "$source_file" "$MODPATH/"
+            ui_print " [+] 已从 $MODULE_PATH 复制到 $MODPATH: wifi7_unlock"
+        fi
+    else
+        ui_print " [-] 跳过 $MODPATH/wifi7_unlock：文件已存在。"
+    fi
+fi
+
+# Wi-Fi 7 解锁：安装时先把改好的驱动配置准备好（只准备文件，不挂载、
+# 不改 persist；挂载和 persist 改动只在开关打开后由 service.sh 做）
+if [ -f /odm/vendor/etc/wifi/WCNSS_qcom_cfg.ini ]; then
+    mkdir -p "$MODPATH/xml"
+    cp -a /odm/vendor/etc/wifi/WCNSS_qcom_cfg.ini "$MODPATH/xml/WCNSS_qcom_cfg.ini"
+    sed -i 's@BandCapability=@#BandCapabilityMOD=@g' "$MODPATH/xml/WCNSS_qcom_cfg.ini"
+    ui_print " [+] 已准备 Wi-Fi 7 解锁配置（未启用，开关在设置页）"
 fi
 
 cp "$MODPATH/module.prop" "$MODPATH/module.prop.bak"
