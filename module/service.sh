@@ -364,6 +364,38 @@ set_tcp_mem() {
 	log_print "tcp_mem set to: $low $pressure $high pages (mem_total=${mem_total_kb}KB)"
 }
 
+# Private DNS 一键切换（标记文件 private_dns_<hostname>，没有就不碰）：
+# 模块代写系统设置 settings put global private_dns_mode/specifier，
+# 和在设置里手填是同一个设置，写完去系统设置里看会显示已配置。
+# 只在当前值和标记不一致时写；标记删掉后模块不再碰这个设置。
+# 标记文件 private_dns_default 表示“恢复系统默认”：主动把模式写回 off。
+apply_private_dns() {
+	local marker hostname current_mode current_host
+	marker=$(ls "$MODPATH"/private_dns_* 2>/dev/null | head -n1)
+	[ -z "$marker" ] && return 0
+	command -v settings >/dev/null 2>&1 || return 0
+	if [ "$(basename "$marker")" = "private_dns_default" ]; then
+		current_mode=$(settings get global private_dns_mode 2>/dev/null)
+		if [ "$current_mode" != "off" ]; then
+			settings put global private_dns_mode off 2>/dev/null
+			settings delete global private_dns_specifier 2>/dev/null
+			log_print " [+] Private DNS 已恢复系统默认"
+		fi
+		return 0
+	fi
+	hostname=$(basename "$marker")
+	hostname=${hostname#private_dns_}
+	[ -z "$hostname" ] && return 0
+	current_mode=$(settings get global private_dns_mode 2>/dev/null)
+	current_host=$(settings get global private_dns_specifier 2>/dev/null)
+	if [ "$current_mode" = "hostname" ] && [ "$current_host" = "$hostname" ]; then
+		return 0
+	fi
+	settings put global private_dns_mode hostname 2>/dev/null
+	settings put global private_dns_specifier "$hostname" 2>/dev/null
+	log_print " [+] Private DNS 已设为 $hostname"
+}
+
 # 网络质量检测（只读：只测、只记日志，绝不据此改 sysctl）
 # 之前这里会按 ping 延迟改 tcp_fastopen/autocorking，还会把 tcp_rmem
 # 写成单个值 16384（这个文件要三个值）—— 2026-11-13 起全部删掉。
@@ -419,6 +451,8 @@ while true; do
 
 	if [ "$new_mode" != "$last_mode" ] || [ -f "$MODPATH/force_apply" ]; then
 		if [ "$((current_time - change_time))" -ge "$DEBOUNCE_TIME" ] || [ "$last_mode" = "none" ]; then
+			# Private DNS 和接口无关：开机、切网、强制应用时都按标记文件写一次
+			apply_private_dns
 			
 			if [ -n "$WATCHDOG_PID" ]; then
 				kill "$WATCHDOG_PID" 2>/dev/null

@@ -1,5 +1,5 @@
 import { exec, toast } from './kernelsu.js';
-import { get_active_iface, get_active_algorithm, get_active_qdisc, getInitcwndInitrwndValue, get_wifi_calling_state, getModuleActiveState } from './common.js';
+import { get_active_iface, get_active_algorithm, get_active_qdisc, getInitcwndInitrwndValue, get_wifi_calling_state, get_private_dns_state, getModuleActiveState } from './common.js';
 import router_state from './router.js';
 
 export async function updateModuleStatus () {
@@ -9,6 +9,7 @@ export async function updateModuleStatus () {
 	var active_algorithm = "未知 ⁉️";
 	var active_qdisc = "未知 ⁉️";
 	var wifi_calling_state = "未知 ⁉️";
+	var private_dns_state = "未知 ⁉️";
 	var active_InitcwndInitrwndValue = [];
 	try
 	{
@@ -20,6 +21,7 @@ export async function updateModuleStatus () {
 		var active_qdisc_tmp = await get_active_qdisc(active_iface);
 		active_qdisc = active_qdisc_tmp ? active_qdisc_tmp : active_qdisc;
 		active_InitcwndInitrwndValue = await getInitcwndInitrwndValue();
+		private_dns_state = await get_private_dns_state();
 		if(active_iface_type == "Wi-Fi 🛜")
 		{
 			wifi_calling_state = await get_wifi_calling_state() ? "活跃 ": "未活跃 ";
@@ -36,6 +38,7 @@ export async function updateModuleStatus () {
 		router_state.homePageParams.active_qdisc = active_qdisc;
 		router_state.homePageParams.active_InitcwndInitrwndValue = active_InitcwndInitrwndValue;
 		router_state.homePageParams.wifi_calling_state = wifi_calling_state;
+		router_state.homePageParams.private_dns_state = private_dns_state;
 	}
 }
 
@@ -68,6 +71,12 @@ export function updateHomeUI () {
 			
 			const wifiCallingDiv = document.getElementById('wifi_calling_value_div');
 			const wifiCallingSpan = document.getElementById('wifi_calling_value');
+
+			const privateDnsDiv = document.getElementById('private_dns_div');
+			const privateDnsSpan = document.getElementById('private_dns_value');
+			if (privateDnsDiv?.classList.contains('hidden'))
+				privateDnsDiv.classList.remove('hidden');
+			privateDnsSpan.textContent = router_state.homePageParams.private_dns_state;
 			
 			if(router_state.homePageParams.active_iface_type == "Wi-Fi 🛜")
 			{

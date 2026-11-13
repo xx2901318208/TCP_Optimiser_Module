@@ -132,6 +132,32 @@ export async function get_wifi_calling_state() {
   }
 }
 
+export async function fetchPrivateDnsMarker () {
+	try {
+		const { stdout: rawFile } = await exec(`ls ${router_state.moduleInformation.moduleDir}/private_dns_* 2>/dev/null | xargs -n 1 basename | head -n1`);
+		const fileName = rawFile.trim();
+		if (!fileName) return "off";
+		return fileName.replace('private_dns_', '');
+	} catch (error) {
+		console.error('Error fetching Private DNS marker:', error);
+		return "off";
+	}
+};
+
+export async function get_private_dns_state() {
+	try {
+		const { stdout: mode } = await exec('settings get global private_dns_mode');
+		if (mode.trim() === 'hostname') {
+			const { stdout: host } = await exec('settings get global private_dns_specifier');
+			return host.trim() || 'hostname';
+		}
+		return '已关闭';
+	} catch (error) {
+		console.error('Error fetching Private DNS state:', error);
+		return '未知';
+	}
+}
+
 export async function fetchIsConfigFile (file_name) {
 	try {
 		const { stdout: output } = await exec(`[ -f "${router_state.moduleInformation.moduleDir}/${file_name}" ] && echo "exist" || echo ""`);

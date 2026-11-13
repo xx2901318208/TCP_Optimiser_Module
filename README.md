@@ -37,6 +37,7 @@
 4. 创建一个名为 `kill_connections` 的空文件，在切换时断开所有连接。[请小心！]
 5. 创建一个名为 `force_apply` 的空文件，立即应用更改。
 6. 创建一个名为 `wifi_powersave_off` 的空文件，在连 Wi-Fi 时关闭 Wi-Fi 省电（降低游戏/语音的空闲唤醒延迟，但更费电；也可以在 WebUI 设置页开关）。
+7. Private DNS 一键切换（也可以在 WebUI 设置页下拉框里选）：创建一个名为 `private_dns_<hostname>` 的空文件，模块会在开机、切网、强制应用时把系统 Private DNS 写成该解析器（和在设置里手填是同一个设置）。可选值（2026-11-13 核实过，国内网络可用）：`dns.adguard-dns.com`（AdGuard，去广告）、`dns.alidns.com`（阿里，国内快）、`dot.pub`（腾讯 DNSPod，国内快）。不要用 Cloudflare（`one.one.one.one`）和 Google（`dns.google`）——国内基本不通。创建一个名为 `private_dns_default` 的空文件可恢复系统默认（把模式写回 off）。没有标记文件时模块不碰这个设置。注意：Private DNS 是严格模式，解析器连不上时手机会显示无网络；开 VPN 时 VPN 的 DNS 优先。安全说明：三个解析器都是加密传输（DoT），都不劫持不存在的域名；区别在日志——AdGuard 宣称不记日志（境外），阿里/腾讯按国内法律留日志。自定义解析器（如 NextDNS `<你的ID>.dns.nextdns.io`）直接按 `private_dns_<hostname>` 的格式建文件即可。
 
 # 通过 WebUI 调整模块设置
 所有模块设置都可以通过 KSU 和 APatch 的模块 WebUI 或 Magisk 的 KsuWebUIStandalone 应用来控制。

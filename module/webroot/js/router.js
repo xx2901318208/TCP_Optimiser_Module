@@ -1,4 +1,4 @@
-import { updateModuleInformation, fetchIsConfigFile } from './common.js';
+import { updateModuleInformation, fetchIsConfigFile, fetchPrivateDnsMarker } from './common.js';
 import { updateModuleStatus, initHome, updateHomeUI } from './home.js';
 import { initLogs } from './logs.js';
 import { initSettings } from './settings.js';
@@ -16,6 +16,7 @@ const router_state = {
 		active_qdisc: "未知 ⁉️",
 		active_InitcwndInitrwndValue: [],
 		wifi_calling_state: false,
+		private_dns_state: "未知 ⁉️",
 	},
 	settingsPageParams: {
 		wlanAlgo: null,
@@ -25,6 +26,7 @@ const router_state = {
 		killConnections: null,
 		initcwndInitrwnd: null,
 		wifiPowersaveOff: null,
+		privateDns: null,
 	},
 	logsList: [],
 	available_algorithms: [],
@@ -60,6 +62,9 @@ const realtimeUpdater = async () => {
 
 		if(router_state.settingsPageParams.wifiPowersaveOff == null)
 			router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
+
+		if(router_state.settingsPageParams.privateDns == null)
+			router_state.settingsPageParams.privateDns = await fetchPrivateDnsMarker();
 
 		if(currentPageStyle != null)
 		{

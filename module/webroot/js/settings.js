@@ -1,7 +1,7 @@
 import { exec, toast } from './kernelsu.js';
 import router_state from './router.js';
 import { addLog } from './logs.js';
-import { fetchIsConfigFile } from './common.js';
+import { fetchIsConfigFile, fetchPrivateDnsMarker } from './common.js';
 
 async function getSelectedQdisc(prefix) {
 	try {
@@ -110,6 +110,42 @@ async function populateDropdown(dropdown, options, prefix, type) {
 	}
 }
 
+const PRIVATE_DNS_OPTIONS = [
+	{ value: "off", label: "关闭（不管理）" },
+	{ value: "default", label: "恢复系统默认" },
+	{ value: "dns.adguard-dns.com", label: "AdGuard（去广告）" },
+	{ value: "dns.alidns.com", label: "阿里 DNS（国内快）" },
+	{ value: "dot.pub", label: "腾讯 DNSPod（国内快）" },
+];
+
+async function populatePrivateDnsDropdown(dropdown) {
+	dropdown.innerHTML = '';
+
+	var value = router_state.settingsPageParams.privateDns == null ? await fetchPrivateDnsMarker() : router_state.settingsPageParams.privateDns;
+	router_state.settingsPageParams.privateDns = value;
+	var valueExists = false;
+
+	PRIVATE_DNS_OPTIONS.forEach(option => {
+		const optionElement = document.createElement('option');
+		optionElement.textContent = option.label;
+		optionElement.value = option.value;
+		dropdown.appendChild(optionElement);
+		valueExists = (value == option.value) ? true : valueExists;
+	});
+
+	// 自定义解析器（标记文件手建的，如 NextDNS）：不在列表里也显示出来，
+	// 免得下拉框显示成“关闭”后一点应用就把标记删了
+	if (value && value != "off" && !valueExists) {
+		const optionElement = document.createElement('option');
+		optionElement.textContent = value + "（自定义）";
+		optionElement.value = value;
+		dropdown.appendChild(optionElement);
+		valueExists = true;
+	}
+
+	dropdown.value = valueExists ? value : "off";
+}
+
 const fetchAvailableAlgorithms = async (force = false) => {
 	try {
 		if(router_state.available_algorithms.length == 0 || force)
@@ -182,6 +218,7 @@ export async function initSettings() {
 	const killConnections = document.getElementById('kill-connections');
 	const initcwndInitrwnd = document.getElementById('initcwnd-initrwnd');
 	const wifiPowersaveOff = document.getElementById('wifi-powersave-off');
+	const privateDns = document.getElementById('private-dns');
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
 	
@@ -204,6 +241,7 @@ export async function initSettings() {
 	await populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc");
 	await populateDropdown(cellularAlgo, router_state.available_algorithms, "rmnet_data", "algo");
 	await populateDropdown(cellularQdisc, router_state.available_qdiscs, "rmnet_data", "qdisc");
+	await populatePrivateDnsDropdown(privateDns);
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;
 	wifiPowersaveOff.checked = router_state.settingsPageParams.wifiPowersaveOff;
@@ -217,6 +255,7 @@ export async function initSettings() {
 			killOnChange: killConnections.checked,
 			setInitcwndInitrwndOnChange: initcwndInitrwnd.checked,
 			wifiPowersaveOff: wifiPowersaveOff.checked,
+			privateDns: privateDns.value,
 		};
 		
 		try
@@ -226,6 +265,7 @@ export async function initSettings() {
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/kill_connections`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
+			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/private_dns_*`);
 			
 			await exec(`touch ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
 			await exec(`touch ${router_state.moduleInformation.moduleDir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc}`);
@@ -238,6 +278,9 @@ export async function initSettings() {
 			if(settings.wifiPowersaveOff)
 				await exec(`touch ${router_state.moduleInformation.moduleDir}/wifi_powersave_off && chmod 644 ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
 
+			if(settings.privateDns && settings.privateDns != "off")
+				await exec(`touch ${router_state.moduleInformation.moduleDir}/private_dns_${settings.privateDns} && chmod 644 ${router_state.moduleInformation.moduleDir}/private_dns_${settings.privateDns}`);
+
 			console.log('Applied settings:', settings);
 		
 		router_state.settingsPageParams.wifiAlgo = settings.wifiAlgorithm;
@@ -247,8 +290,9 @@ export async function initSettings() {
 		router_state.settingsPageParams.killConnections = settings.killOnChange;
 		router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
 		router_state.settingsPageParams.wifiPowersaveOff = settings.wifiPowersaveOff;
+		router_state.settingsPageParams.privateDns = settings.privateDns;
 		toast("设置已成功应用！");
-		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}, wifi_powersave_off=${settings.wifiPowersaveOff}`);
+		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}, wifi_powersave_off=${settings.wifiPowersaveOff}, private_dns=${settings.privateDns}`);
 		return 0;
 	} catch (error) {
 		console.error('Error applying settings:', error);
