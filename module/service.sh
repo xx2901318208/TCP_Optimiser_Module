@@ -6,6 +6,22 @@ VOWIFI_CONNECT_TIME=20
 
 . $MODPATH/utils.sh # Load utils
 
+# 单实例保护：模块更新后 Magisk 会再启动一个 service.sh，旧的循环不会自己退出。
+# 不处理的话两个（甚至三个）循环同时跑：同一秒出现三遍日志、看门狗反复启动、
+# 设置重复应用。启动时先按 PID 文件杀掉旧的（核对 cmdline，防 PID 复用误杀）。
+if [ -f "$MODPATH/service.pid" ]; then
+	OLD_PID=$(cat "$MODPATH/service.pid" 2>/dev/null)
+	if [ -n "$OLD_PID" ] && [ "$OLD_PID" != "$$" ] && [ -d "/proc/$OLD_PID" ]; then
+		if tr '\0' ' ' < "/proc/$OLD_PID/cmdline" 2>/dev/null | grep -q "service.sh"; then
+			log_print "[INFO] 发现旧的 service.sh 进程 ($OLD_PID)，先结束它再启动"
+			kill "$OLD_PID" 2>/dev/null
+			sleep 1
+			kill -9 "$OLD_PID" 2>/dev/null
+		fi
+	fi
+fi
+echo $$ > "$MODPATH/service.pid"
+
 # Get the list of available congestion control algorithms
 congestion_algorithms=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
 
@@ -218,8 +234,19 @@ apply_wifi_settings() {
 			iw dev "$iface" set power_save on 2>/dev/null
 		fi
 	fi
-	freq=$(get_wifi_freq "$iface")
-	log_print "检测到 Wi-Fi 频段: ${freq} MHz"
+	# 刚切到 Wi-Fi 时 iw 可能还没读到关联信息（freq 为空），等 2 秒重试两次，
+	# 三次都空才放弃（只打一行提示，不刷“ MHz”空行）
+	freq=""
+	for _try in 1 2 3; do
+		freq=$(get_wifi_freq "$iface")
+		[ -n "$freq" ] && break
+		sleep 2
+	done
+	if [ -n "$freq" ]; then
+		log_print "检测到 Wi-Fi 频段: ${freq} MHz"
+	else
+		log_print "[!] 未读到 Wi-Fi 频段（iw link 无 freq），跳过频段 pacing"
+	fi
 	if [ -n "$freq" ]; then
 		if [ "$freq" -lt 3000 ]; then
 			# 2.4 GHz

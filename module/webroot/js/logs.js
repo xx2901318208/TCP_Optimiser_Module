@@ -122,6 +122,10 @@ export async function initLogs() {
 		}
 	});
 	
+	// 打开日志页就直接读一次文件：之前这里只渲染 realtimeUpdater 启动时
+	// 读到的旧数据，刚打开时列表还是空的，要等下一个 5 秒轮询才出现，
+	// 所以总觉得“打开要等一会才有日志”。
 	router_state.isInitializing = false;
+	await read_log_file();
 	updateLogsUI();
 }

@@ -1,0 +1,34 @@
+<div class="card settings">
+  <div class="card-header">
+	<h3>去广告</h3>
+  </div>
+
+  <div class="setting-group">
+	<div class="setting-row">
+	  <label for="private-dns">Private DNS</label>
+	  <select id="private-dns" class="dropdown">
+		<option value="none">正在加载选项</option>
+	  </select>
+	</div>
+  </div>
+
+  <div class="setting-group">
+	<span class="setting-note">建议：Private DNS 和 hosts 去广告不要同时开。两者叠加时哪个先生效不明确，出了问题也难排查；用 hosts 去广告时，把 Private DNS 选成“恢复系统默认”或“关闭（不管理）”。</span>
+  </div>
+
+  <div class="setting-group toggle-container">
+	<label id="adblock-hosts-label" for="adblock-hosts">去广告（hosts）</label>
+	<label class="toggle">
+	  <input type="checkbox" id="adblock-hosts">
+	  <span class="slider"></span>
+	</label>
+  </div>
+
+  <div class="setting-group">
+	<span class="setting-note">hosts 去广告：把 StevenBlack 广告+恶意域名列表（2026-11-08 版，78215 条规则）挂载到 /system/etc/hosts，广告域名在本地直接拦住，不会发出去。只影响之后的新查询，已经打开的应用要等 DNS 缓存过期或重启应用才生效。</span>
+  </div>
+
+	<div class="setting-group toggle-container">
+		<button id="apply" class="apply-btn">应用</button>
+	</div>
+</div>

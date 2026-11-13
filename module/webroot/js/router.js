@@ -2,6 +2,7 @@ import { updateModuleInformation, fetchIsConfigFile, fetchPrivateDnsMarker } fro
 import { updateModuleStatus, initHome, updateHomeUI } from './home.js';
 import { initLogs } from './logs.js';
 import { initSettings } from './settings.js';
+import { initAdblock } from './adblock.js';
 import { addLog, read_log_file, updateLogsUI } from './logs.js';
 import { fullScreen } from './kernelsu.js';
 
@@ -26,6 +27,8 @@ const router_state = {
 		killConnections: null,
 		initcwndInitrwnd: null,
 		wifiPowersaveOff: null,
+	},
+	adblockPageParams: {
 		adblockHosts: null,
 		privateDns: null,
 	},
@@ -64,11 +67,11 @@ const realtimeUpdater = async () => {
 		if(router_state.settingsPageParams.wifiPowersaveOff == null)
 			router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
 
-		if(router_state.settingsPageParams.adblockHosts == null)
-			router_state.settingsPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
+		if(router_state.adblockPageParams.adblockHosts == null)
+			router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
 
-		if(router_state.settingsPageParams.privateDns == null)
-			router_state.settingsPageParams.privateDns = await fetchPrivateDnsMarker();
+		if(router_state.adblockPageParams.privateDns == null)
+			router_state.adblockPageParams.privateDns = await fetchPrivateDnsMarker();
 
 		if(currentPageStyle != null)
 		{
@@ -142,6 +145,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 								break;
 							case 'settings':
 								module.initSettings();
+								break;
+							case 'adblock':
+								module.initAdblock();
 								break;
 							case 'logs':
 								module.initLogs();
