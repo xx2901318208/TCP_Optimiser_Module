@@ -4,6 +4,7 @@ import router_state from './router.js';
 
 const logHeadingDefaultValue = "日志";
 let prev_logs_count = 0;
+let prev_logs_last = '';
 
 export async function addLog(message) {
 	try
@@ -54,7 +55,10 @@ function addLogToScreen(message, withTimestamp = false) {
 
 export function updateLogsUI () {
 	if (router_state.isInitializing == false) {
-		if(router_state.logsList.length != prev_logs_count)
+		// 光比行数不够：文件截断到 200 行时行数不变、内容换了，
+		// 也要重绘。最后一行一起比，行数相同内容变了也能发现。
+		const lastLine = router_state.logsList.length > 0 ? router_state.logsList[router_state.logsList.length - 1] : '';
+		if(router_state.logsList.length != prev_logs_count || lastLine != prev_logs_last)
 		{
 			const logContent = document.getElementById('log-content');
 			// 记下重绘前是否已在底部：在底部才跟进新行，否则保持用户正在看的位置，
@@ -71,6 +75,7 @@ export function updateLogsUI () {
 			// 之前这里写反了：logsList.length = prev_logs_count 会把列表截断，
 			// prev_logs_count 永远是 0，导致每 5 秒无条件整页重绘。
 			prev_logs_count = router_state.logsList.length;
+			prev_logs_last = lastLine;
 		}
 	}
 }
@@ -118,6 +123,7 @@ export async function initLogs() {
 			document.getElementById('logs-heading').textContent = logHeadingDefaultValue;
 			router_state.logsList = [];
 			prev_logs_count = 0;
+			prev_logs_last = '';
 		} catch (error)
 		{
 			console.error('Error clearing log file: ', error);

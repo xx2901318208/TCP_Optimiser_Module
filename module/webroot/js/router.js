@@ -1,4 +1,4 @@
-import { updateModuleInformation, fetchIsConfigFile, fetchPrivateDnsMarker } from './common.js';
+import { updateModuleInformation, fetchIsConfigFile, fetchPrivateDnsMarker, fetchModuleDirListing } from './common.js';
 import { updateModuleStatus, initHome, updateHomeUI } from './home.js';
 import { initLogs } from './logs.js';
 import { initSettings } from './settings.js';
@@ -56,20 +56,22 @@ const realtimeUpdater = async () => {
 		// 首轮读取并行跑：状态、日志、5 个标记文件互不依赖，
 		// 原先一个接一个等十几个 shell，首页和日志页都要等完整一串。
 		const fetchMarkers = async () => {
+			// 5 个标记文件一次 ls 全拿回来本地判断，不再每个各跑一次 shell
+			const listing = await fetchModuleDirListing();
 			if(router_state.settingsPageParams.killConnections == null)
-				router_state.settingsPageParams.killConnections = await fetchIsConfigFile("kill_connections");
+				router_state.settingsPageParams.killConnections = listing.includes("kill_connections");
 
 			if(router_state.settingsPageParams.initcwndInitrwnd == null)
-				router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd");
+				router_state.settingsPageParams.initcwndInitrwnd = listing.includes("initcwnd_initrwnd");
 
 			if(router_state.settingsPageParams.wifiPowersaveOff == null)
-				router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
+				router_state.settingsPageParams.wifiPowersaveOff = listing.includes("wifi_powersave_off");
 
 			if(router_state.adblockPageParams.adblockHosts == null)
-				router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
+				router_state.adblockPageParams.adblockHosts = listing.includes("adblock_hosts");
 
 			if(router_state.adblockPageParams.privateDns == null)
-				router_state.adblockPageParams.privateDns = await fetchPrivateDnsMarker();
+				router_state.adblockPageParams.privateDns = await fetchPrivateDnsMarker(listing);
 		};
 
 		// First Read
@@ -93,25 +95,36 @@ const realtimeUpdater = async () => {
 			}
 		}
 		
-		setInterval(async () => {
-			await Promise.all([
-				updateModuleStatus(),
-				read_log_file(),
-			]);
-			if(currentPageStyle != null)
-			{
-				switch(router_state.current_active_page)
-				{
-					case 'home':
-						updateHomeUI();
-						break;
-					
-					case 'logs':
-					updateLogsUI();
-					break;
+		// 轮询用自调度的 setTimeout：上一轮没跑完不启动下一轮。
+		// 之前 setInterval 不等上一轮，dumpsys/ping 慢的时候几轮叠在一起跑，
+		// 越叠越慢，设置页的 exec 全堵在后面。
+		const scheduleTick = () => {
+			setTimeout(async () => {
+				try {
+					await Promise.all([
+						updateModuleStatus(),
+						read_log_file(),
+					]);
+					if(currentPageStyle != null)
+					{
+						switch(router_state.current_active_page)
+						{
+							case 'home':
+								updateHomeUI();
+								break;
+							
+							case 'logs':
+							updateLogsUI();
+							break;
+						}
+					}
+				} catch (error) {
+					console.error('Error in update tick: ', error);
 				}
-			}
-		}, "5000");
+				scheduleTick();
+			}, 5000);
+		};
+		scheduleTick();
 	} catch (error) {
 		console.error('Error setting update loop: ', error);
 		addLog('设置更新循环出错。');
@@ -122,7 +135,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 	const navLinks = document.querySelectorAll('.footer-nav .nav-item');
 	fullScreen(true);
 
+	let pageGeneration = 0; // 切页代号：用户点得快、两次切页撞在一起时，
+	// 旧的那次直接作废，不让它的 init 在新页面上跑——之前这样能把
+	// isInitializing 卡在 true，日志/首页就再也不刷新了。
 	function loadPage(pageName) {
+		const generation = ++pageGeneration;
 		return new Promise(async (resolve, reject) => {
 			const currentPage = document.getElementById('current-page');
 			const contentContainer = document.getElementById('page-content');
@@ -132,9 +149,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 			currentPage.style.transition = 'opacity 0.4s ease';
 			
 			setTimeout(() => {
+				if (generation !== pageGeneration) { resolve(); return; }
 				fetch(`./pages/${pageName}.html`)
 				.then(response => response.text())
 				.then(html => {
+					if (generation !== pageGeneration) { resolve(); return; }
 					router_state.isInitializing = true;
 					router_state.current_active_page = pageName;
 					
@@ -147,6 +166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 					
 					// Load page-specific script
 					import(`./${pageName}.js`).then(module => {
+						if (generation !== pageGeneration) { resolve(); return; }
 						switch (pageName) {
 							case 'home':
 								module.initHome();

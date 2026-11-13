@@ -24,18 +24,27 @@ async function readModuleProp () {
 
 export async function updateModuleInformation () {
 	try {
-		router_state.moduleInformation = JSON.parse(moduleInfo());
-		if(router_state.moduleInformation != {}) {
-			router_state.moduleInformation = await readModuleProp();
-		}
-	}catch (error) {
-		console.error('Error updating module info:', error);
+		// 先试管理器的 moduleInfo；解析失败也不炸，直接回落到读文件。
+		// 注意最后一定用 readModuleProp 的结果，因为它带 moduleDir，
+		// 管理器返回的对象里没有这个字段。
+		// 之前这里有个永远为真的判断（对象和 {} 比地址恒不相等），
+		// 而版本那几行写在 try 外面：解析一失败 moduleInformation 还是
+		// null，后面直接读 .version 就抛错，版本一直停在“正在加载版本…”。
+		const parsed = JSON.parse(moduleInfo());
+		if (parsed) router_state.moduleInformation = parsed;
+	} catch (error) {
+		console.error('Error parsing module info:', error);
+	}
+	router_state.moduleInformation = await readModuleProp();
+	if (!router_state.moduleInformation) {
 		toast("获取模块信息出错。");
+		return;
 	}
 	var versionStr = router_state.moduleInformation.version ? 'v' + router_state.moduleInformation.version : '';
 	var versionCodeStr = router_state.moduleInformation.versionCode ? router_state.moduleInformation.versionCode : '';
 	var finalVersionStr = versionStr != '' && versionCodeStr != '' ? `${versionStr} (${versionCodeStr})` : "module.prop 文件可能已损坏！"
-	document.getElementById('version').textContent = finalVersionStr;
+	const versionEl = document.getElementById('version');
+	if (versionEl) versionEl.textContent = finalVersionStr;
 }
 
 export async function getModuleActiveState () {
@@ -108,6 +117,19 @@ export async function getInitcwndInitrwndValue () {
 };
 
 export async function get_wifi_calling_state() {
+  // 首选 service.sh 每轮写的状态文件（cat 一下就行，不用 dumpsys）：
+  // 之前这里每 5 秒跑一遍 dumpsys（1-3 秒），还占着 exec 通道，
+  // 设置页的下拉框都要在后面排队。文件还没有（刚开机、刚连 Wi-Fi
+  // 还没评估到）时才回落到 dumpsys 直查。
+  try {
+    const STATE_FILE = `${router_state.moduleInformation.moduleDir}/vowifi_state`;
+    const { stdout: state } = await exec(`cat "${STATE_FILE}" 2>/dev/null`);
+    if (state.trim() === '1') return true;
+    if (state.trim() === '0') return false;
+  } catch (error) {
+    // 读不到文件就继续往下走 dumpsys 回落
+  }
+
   const DUMPSYS_TMP_FILE = `${router_state.moduleInformation.moduleDir}/dumpsys.tmp`;
 
   try {
@@ -132,7 +154,24 @@ export async function get_wifi_calling_state() {
   }
 }
 
-export async function fetchPrivateDnsMarker () {
+// 一次 ls 拿回模块目录的全部文件名，供设置页/启动时一次推导多个标记和
+// 下拉框当前值，免得每个标记、每个下拉框各跑一次 shell。调用方在拿到
+// 列表后用它做本地判断，不再逐个 exec。
+export async function fetchModuleDirListing() {
+	try {
+		const { stdout: output } = await exec(`ls ${router_state.moduleInformation.moduleDir}`);
+		return output.trim().split('\n').filter(line => line.length > 0);
+	} catch (error) {
+		console.error('Error listing module dir: ', error);
+		return [];
+	}
+}
+
+export async function fetchPrivateDnsMarker (listing) {
+	if (listing) {
+		const entry = listing.find(name => name.startsWith('private_dns_'));
+		return entry ? entry.replace('private_dns_', '') : "off";
+	}
 	try {
 		const { stdout: rawFile } = await exec(`ls ${router_state.moduleInformation.moduleDir}/private_dns_* 2>/dev/null | xargs -n 1 basename | head -n1`);
 		const fileName = rawFile.trim();
@@ -158,7 +197,9 @@ export async function get_private_dns_state() {
 	}
 }
 
-export async function fetchIsConfigFile (file_name) {
+export async function fetchIsConfigFile (file_name, listing) {
+	// 调用方已经一次 ls 拿回目录列表时直接本地判断，不再多跑一次 shell
+	if (listing) return listing.includes(file_name);
 	try {
 		const { stdout: output } = await exec(`[ -f "${router_state.moduleInformation.moduleDir}/${file_name}" ] && echo "exist" || echo ""`);
 		return output == "exist";

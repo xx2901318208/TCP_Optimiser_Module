@@ -154,25 +154,22 @@ async function loadNetworkQualityInfo() {
 		document.getElementById('kernel_version_value').textContent = kernelVersion || '未知';
 		document.getElementById('kernel_version_div').classList.remove('hidden');
 
-		// 检测网络延迟
-		const { stdout: pingResult } = await exec('ping -c 1 -W 1 8.8.8.8 2>/dev/null | grep "time="');
+		// 原先延迟和抖动各跑一次 ping（-c 1 和 -c 5），两次加起来最多 6 秒，
+		// 还占着 exec 通道，刚打开应用就点设置时，下拉框也要在后面排队。
+		// 一次 ping -c 3 同时取延迟（第一个样本）和抖动（三个样本的极差）。
+		const { stdout: pingResult } = await exec('ping -c 3 -W 1 8.8.8.8 2>/dev/null | grep "time="');
 		if (pingResult) {
-			const latency = pingResult.match(/time=(\d+\.?\d*)/);
-			if (latency) {
-				document.getElementById('network_latency_value').textContent = `${latency[1]} ms`;
-				document.getElementById('network_latency_div').classList.remove('hidden');
-			}
-		}
-
-		// 检测网络抖动
-		const { stdout: jitterResult } = await exec('ping -c 5 -W 1 8.8.8.8 2>/dev/null | grep "time="');
-		if (jitterResult) {
-			const times = jitterResult.match(/time=(\d+\.?\d*)/g);
-			if (times && times.length >= 2) {
+			const times = pingResult.match(/time=(\d+\.?\d*)/g);
+			if (times && times.length >= 1) {
 				const values = times.map(t => parseFloat(t.split('=')[1]));
-				const jitter = Math.max(...values) - Math.min(...values);
-				document.getElementById('network_jitter_value').textContent = `${jitter.toFixed(1)} ms`;
-				document.getElementById('network_jitter_div').classList.remove('hidden');
+				document.getElementById('network_latency_value').textContent = `${values[0]} ms`;
+				document.getElementById('network_latency_div').classList.remove('hidden');
+
+				if (times.length >= 2) {
+					const jitter = Math.max(...values) - Math.min(...values);
+					document.getElementById('network_jitter_value').textContent = `${jitter.toFixed(1)} ms`;
+					document.getElementById('network_jitter_div').classList.remove('hidden');
+				}
 			}
 		}
 	} catch (error) {

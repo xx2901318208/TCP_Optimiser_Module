@@ -22,7 +22,9 @@
 }
 
 .logs {
-  height: calc(100vh - var(--footer-height) - calc(var(--spacing) * 10));
+  /* 之前只减了 60px 底栏，没算顶部偏移和手势条加高的底栏，
+     有刘海/手势条的机器上会溢出几像素 */
+  height: calc(100vh - var(--footer-height) - var(--window-inset-bottom, 0px) - max(var(--window-inset-top, 0px), 28px) - calc(var(--spacing) * 10));
   display: flex;
   flex-direction: column;
 }

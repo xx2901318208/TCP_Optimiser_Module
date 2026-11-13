@@ -4,8 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TCP 优化器</title>
-  <!-- Window Safe Area Insets -->
-  <link rel="stylesheet" type="text/css" href="https://mui.kernelsu.org/internal/insets.css" />
+  <!-- Window Safe Area Insets：非阻塞加载——之前这个远程样式表是
+       渲染阻塞的，弱网时整个应用要等它超时才画第一帧，看起来像卡死；
+       加载失败时 common.css 的 28px 兜底顶上，不会再没上边距 -->
+  <link rel="stylesheet" type="text/css" href="https://mui.kernelsu.org/internal/insets.css" media="print" onload="this.media='all'" />
   <link rel="stylesheet" href="./css/common.css">
   <link rel="stylesheet" href="./css/icons.css">
   <script type="module" src="./js/router.js"></script>

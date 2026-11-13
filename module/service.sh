@@ -22,6 +22,22 @@ if [ -f "$MODPATH/service.pid" ]; then
 fi
 echo $$ > "$MODPATH/service.pid"
 
+# 看门狗是旧循环的后台子进程，杀旧循环时它不会跟着死：每次更新模块都
+# 留一个孤儿在后台轮询 tc，越攒越多。启动时按 PID 文件一并杀掉
+# （同样核对 cmdline，防 PID 复用误杀；文件里是子进程的 PID）。
+if [ -f "$MODPATH/watchdog.pid" ]; then
+	OLD_WD=$(cat "$MODPATH/watchdog.pid" 2>/dev/null)
+	if [ -n "$OLD_WD" ] && [ "$OLD_WD" != "$$" ] && [ -d "/proc/$OLD_WD" ]; then
+		if tr '\0' ' ' < "/proc/$OLD_WD/cmdline" 2>/dev/null | grep -q "service.sh"; then
+			log_print "[INFO] 发现旧的看门狗进程 ($OLD_WD)，先结束它再启动"
+			kill "$OLD_WD" 2>/dev/null
+			sleep 1
+			kill -9 "$OLD_WD" 2>/dev/null
+		fi
+	fi
+	rm -f "$MODPATH/watchdog.pid"
+fi
+
 # Get the list of available congestion control algorithms
 congestion_algorithms=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
 
@@ -378,6 +394,14 @@ run_qdisc_watchdog() {
     done
 }
 
+# 启动看门狗并记下它的 PID：后台子进程的 PID 必须由主循环在启动时
+# 用 $! 记录——在子进程里 $$ 拿到的是主循环的 PID，记了也没用。
+start_qdisc_watchdog() {
+	run_qdisc_watchdog "$1" "$2" "$3" &
+	WATCHDOG_PID=$!
+	echo "$WATCHDOG_PID" > "$MODPATH/watchdog.pid" 2>/dev/null
+}
+
 set_tcp_mem() {
 	local mem_total_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo)
 	local mem_total_pages=$((mem_total_kb * 1024 / 4096))
@@ -468,7 +492,7 @@ detect_network_quality() {
 	log_print "网络延迟检测 ($mode, $iface): $latency ms（仅记录，不调整参数）"
 
 	# 获取网络抖动（仅记录）
-	local jitter=$(ping -c 5 -W 1 8.8.8.8 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' | awk '{if(min==""){min=max=$1}; if($1>max) max=$1; if($1<min) min=$1} END {print max-min}')
+	local jitter=$(ping -c 3 -W 1 8.8.8.8 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' | awk '{if(min==""){min=max=$1}; if($1>max) max=$1; if($1<min) min=$1} END {print max-min}')
 	jitter=${jitter:-"N/A"}
 	log_print "网络抖动检测 ($mode, $iface): $jitter ms（仅记录，不调整参数）"
 }
@@ -517,27 +541,30 @@ while true; do
 			if [ -n "$WATCHDOG_PID" ]; then
 				kill "$WATCHDOG_PID" 2>/dev/null
 				WATCHDOG_PID=""
+				rm -f "$MODPATH/watchdog.pid"
 			fi
 			
 			if [ "$new_mode" = "Wi-Fi" ]; then
 				# Start waiting for VoWiFi
 				vowifi_pending=1
 				vowifi_start_time="$current_time"
-				# 检测网络质量（后台跑：只记日志，ping 最多卡 6 秒，不能堵主循环）
+				# 检测网络质量（后台跑：只记日志，ping 最多卡 4 秒，不能堵主循环）
 				detect_network_quality "$iface" "Wi-Fi" &
 			elif [ "$new_mode" = "Cellular" ]; then
 				vowifi_pending=0
+				echo 0 > "$MODPATH/vowifi_state" 2>/dev/null
 				apply_cellular_settings "$iface"
 				# 检测网络质量（后台跑，同上）
 				detect_network_quality "$iface" "Cellular" &
 
-				run_qdisc_watchdog "$iface" "Cellular" "60" &
-				WATCHDOG_PID=$!
+				start_qdisc_watchdog "$iface" "Cellular" "60"
 			elif [ "$new_mode" = "VPN" ]; then
 				vowifi_pending=0
+				echo 0 > "$MODPATH/vowifi_state" 2>/dev/null
 				log_print "[INFO] VPN 接口 ($iface)，保留当前 TCP 设置，不重新应用。"
 			elif [ "$new_mode" = "none" ]; then
                 vowifi_pending=0
+                echo 0 > "$MODPATH/vowifi_state" 2>/dev/null
                 log_print "[INFO] 接口完全断开（飞行模式/互联网关闭）。"
             fi
 			last_mode="$new_mode"
@@ -552,27 +579,47 @@ while true; do
 	if [ "$new_mode" = "Wi-Fi" ] && [ "$vowifi_pending" -eq 1 ]; then
 		vowifi=$(get_wifi_calling_state)
 		vowifi=${vowifi:-1}
+		# 把结果写进状态文件给 WebUI 首页读：之前 WebUI 每 5 秒自己跑一遍
+		# dumpsys（1-3 秒），还占着 exec 通道，设置页的下拉框都要在后面排队，
+		# 这就是“正在加载选项”等很久的主因之一。service 本来就要算这个值，
+		# 顺手写文件，UI 改成 cat 文件（瞬间完成）。
+		if [ "$vowifi" -eq 0 ]; then
+			echo 1 > "$MODPATH/vowifi_state" 2>/dev/null
+		else
+			echo 0 > "$MODPATH/vowifi_state" 2>/dev/null
+		fi
 		if [ "$((current_time - vowifi_start_time))" -ge "$VOWIFI_CONNECT_TIME" ]; then
 			log_print "[INFO] VoWiFi 超时到达。应用 Wi-Fi 设置..."
 			vowifi_pending=0
 			apply_wifi_settings "$iface"
 
-			run_qdisc_watchdog "$iface" "Wi-Fi" "30" &
-			WATCHDOG_PID=$!
+			start_qdisc_watchdog "$iface" "Wi-Fi" "30"
 		elif [ "$vowifi" -eq 0 ]; then
 			log_print "[INFO] VoWiFi 已激活。应用 Wi-Fi 设置..."
 			vowifi_pending=0
 			apply_wifi_settings "$iface"
 
-			run_qdisc_watchdog "$iface" "Wi-Fi" "30" &
-			WATCHDOG_PID=$!
+			start_qdisc_watchdog "$iface" "Wi-Fi" "30"
 		elif [ "$vowifi" -eq 2 ]; then
 			log_print "[INFO] 本机未开通 VoWiFi，跳过等待，直接应用 Wi-Fi 设置..."
 			vowifi_pending=0
 			apply_wifi_settings "$iface"
 
-			run_qdisc_watchdog "$iface" "Wi-Fi" "30" &
-			WATCHDOG_PID=$!
+			start_qdisc_watchdog "$iface" "Wi-Fi" "30"
+		fi
+	fi
+
+	# Wi-Fi 已连接且不在等待期时，每 60 秒复查一次 VoWiFi，给首页的状态文件保鲜
+	# （等 20 秒超时后才开通的 VoWiFi，没有这一行就永远显示“未活跃”）。
+	# dumpsys 只在后台 service 里跑，不占 WebUI 的 exec 通道。
+	if [ "$new_mode" = "Wi-Fi" ] && [ "$vowifi_pending" -eq 0 ]; then
+		if [ "$((current_time % 60))" -eq 0 ]; then
+			vowifi=$(get_wifi_calling_state)
+			if [ "$vowifi" -eq 0 ]; then
+				echo 1 > "$MODPATH/vowifi_state" 2>/dev/null
+			else
+				echo 0 > "$MODPATH/vowifi_state" 2>/dev/null
+			fi
 		fi
 	fi
 

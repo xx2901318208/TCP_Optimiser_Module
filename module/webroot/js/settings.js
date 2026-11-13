@@ -1,12 +1,17 @@
 import { exec, toast } from './kernelsu.js';
 import router_state from './router.js';
 import { addLog } from './logs.js';
-import { fetchIsConfigFile } from './common.js';
+import { fetchModuleDirListing } from './common.js';
 
-async function getSelectedQdisc(prefix) {
+async function getSelectedQdisc(prefix, listing) {
 	try {
-		const { stdout: rawFile } = await exec(`ls ${router_state.moduleInformation.moduleDir}/${prefix}_* 2>/dev/null | xargs -n 1 basename | head -n1`);
-		const fileName = rawFile.trim();
+		let fileName;
+		if (listing) {
+			fileName = listing.find(name => name.startsWith(prefix + '_')) || "";
+		} else {
+			const { stdout: rawFile } = await exec(`ls ${router_state.moduleInformation.moduleDir}/${prefix}_* 2>/dev/null | xargs -n 1 basename | head -n1`);
+			fileName = rawFile.trim();
+		}
 		if (!fileName) return "fifo";
 		const stripInterface = fileName.replace(`${prefix}_`, '');
 		const qdisc = stripInterface.substring(stripInterface.indexOf('_') + 1);
@@ -30,10 +35,15 @@ async function getSelectedQdisc(prefix) {
 	}
 }
 
-async function getSelectedAlgorithm(prefix) {
+async function getSelectedAlgorithm(prefix, listing) {
 	try {
-		const { stdout: rawFile } = await exec(`ls ${router_state.moduleInformation.moduleDir}/${prefix}_* 2>/dev/null | xargs -n 1 basename | head -n1`);
-		const fileName = rawFile.trim();
+		let fileName;
+		if (listing) {
+			fileName = listing.find(name => name.startsWith(prefix + '_')) || "";
+		} else {
+			const { stdout: rawFile } = await exec(`ls ${router_state.moduleInformation.moduleDir}/${prefix}_* 2>/dev/null | xargs -n 1 basename | head -n1`);
+			fileName = rawFile.trim();
+		}
 		if (!fileName) return "fifo";
 		const stripInterface = fileName.replace(`${prefix}_`, '');
 		const algo = stripInterface.substring(0, stripInterface.indexOf('_'));
@@ -57,17 +67,17 @@ async function getSelectedAlgorithm(prefix) {
 	}
 }
 
-async function checkAndGetPrefixValueExists(prefix, type) {
+async function checkAndGetPrefixValueExists(prefix, type, listing) {
 	switch(prefix)
 	{
 		case "wlan":
 			switch(type)
 			{
 				case "algo":
-					return router_state.settingsPageParams.wlanAlgo == null ? await getSelectedAlgorithm(prefix): router_state.settingsPageParams.wlanAlgo;
+					return router_state.settingsPageParams.wlanAlgo == null ? await getSelectedAlgorithm(prefix, listing): router_state.settingsPageParams.wlanAlgo;
 					break;
 				case "qdisc":
-					return router_state.settingsPageParams.wlanQdisc == null ? await getSelectedQdisc(prefix): router_state.settingsPageParams.wlanQdisc;
+					return router_state.settingsPageParams.wlanQdisc == null ? await getSelectedQdisc(prefix, listing): router_state.settingsPageParams.wlanQdisc;
 					break;
 			}
 		break;
@@ -76,20 +86,22 @@ async function checkAndGetPrefixValueExists(prefix, type) {
 			switch(type)
 			{
 				case "algo":
-					return router_state.settingsPageParams.rmnetAlgo == null ? await getSelectedAlgorithm(prefix): router_state.settingsPageParams.rmnetAlgo;
+					return router_state.settingsPageParams.rmnetAlgo == null ? await getSelectedAlgorithm(prefix, listing): router_state.settingsPageParams.rmnetAlgo;
 					break;
 				case "qdisc":
-					return router_state.settingsPageParams.rmnetQdisc == null ? await getSelectedQdisc(prefix): router_state.settingsPageParams.rmnetQdisc;
+					return router_state.settingsPageParams.rmnetQdisc == null ? await getSelectedQdisc(prefix, listing): router_state.settingsPageParams.rmnetQdisc;
 					break;
 			}
 			break;
 	}
 }
 
-async function populateDropdown(dropdown, options, prefix, type) {
+async function populateDropdown(dropdown, options, prefix, type, listing) {
+	// 先等当前值回来再清选项：之前先清空再等，等待期间下拉框是空的，
+	// 看起来像坏了。原来的“正在加载选项”占位就一直留到值回来。
+	var value = await checkAndGetPrefixValueExists(prefix, type, listing);
 	dropdown.innerHTML = '';
 
-	var value = await checkAndGetPrefixValueExists(prefix, type);
 	var valueExists = false;
   
 	options.forEach(option => {
@@ -162,8 +174,10 @@ const fetchAvailableQdiscs = async (force = false) => {
 				}
 				router_state.available_qdiscs = qdiscs;
 			} else {
-				addLog('获取队列调度规则失败');
-				toast("未找到队列调度规则。");
+				// /proc/config.gz 读不到（有些内核没开 IKCONFIG_PROC）时给一份
+				// 常见内置队列兜底，不然下拉框是空的、没法选
+				router_state.available_qdiscs = ["fq_codel", "fq", "pfifo_fast", "htb", "noqueue"];
+				addLog('读取内核队列配置失败，使用内置队列列表');
 			}
 		}
 		
@@ -185,22 +199,31 @@ export async function initSettings() {
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
 	
-	// 原先这里 9 个 shell 命令一个接一个等（算法、队列、3 个标记文件、
-	// 4 个下拉框取值），每个都要等 shell 起起来，点设置要卡好几秒。
-	// 这些读取互不依赖，并行跑，总耗时只剩最慢的那一个。
-	await Promise.all([
+	// 打开设置页一共只跑 3 个 shell 命令：一次 ls 拿回目录列表、
+	// 读可用算法、读可用队列。3 个标记文件和 4 个下拉框的当前值
+	// 全从这一次 ls 里本地推导，不再每个各跑一次 shell。
+	// （之前是 9 个串行命令；4.11 改成并行也没用——真正慢的是排在
+	// 前面的 dumpsys 和 ping 占着 exec 通道，见 common.js 的状态文件。）
+	const [listing] = await Promise.all([
+		fetchModuleDirListing(),
 		(async () => { if(router_state.available_algorithms.length == 0) await fetchAvailableAlgorithms(); })(),
 		(async () => { if(router_state.available_qdiscs.length == 0) await fetchAvailableQdiscs(); })(),
-		(async () => { if(router_state.settingsPageParams.killConnections == null) router_state.settingsPageParams.killConnections = await fetchIsConfigFile("kill_connections"); })(),
-		(async () => { if(router_state.settingsPageParams.initcwndInitrwnd == null) router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd"); })(),
-		(async () => { if(router_state.settingsPageParams.wifiPowersaveOff == null) router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off"); })(),
 	]);
 
+	if(router_state.settingsPageParams.killConnections == null)
+		router_state.settingsPageParams.killConnections = listing.includes("kill_connections");
+
+	if(router_state.settingsPageParams.initcwndInitrwnd == null)
+		router_state.settingsPageParams.initcwndInitrwnd = listing.includes("initcwnd_initrwnd");
+
+	if(router_state.settingsPageParams.wifiPowersaveOff == null)
+		router_state.settingsPageParams.wifiPowersaveOff = listing.includes("wifi_powersave_off");
+
 	await Promise.all([
-		populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo"),
-		populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc"),
-		populateDropdown(cellularAlgo, router_state.available_algorithms, "rmnet_data", "algo"),
-		populateDropdown(cellularQdisc, router_state.available_qdiscs, "rmnet_data", "qdisc"),
+		populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo", listing),
+		populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc", listing),
+		populateDropdown(cellularAlgo, router_state.available_algorithms, "rmnet_data", "algo", listing),
+		populateDropdown(cellularQdisc, router_state.available_qdiscs, "rmnet_data", "qdisc", listing),
 	]);
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;

@@ -12,9 +12,10 @@ const PRIVATE_DNS_OPTIONS = [
 ];
 
 async function populatePrivateDnsDropdown(dropdown) {
+	// 同设置页：先等值回来再清选项，等待期间保留“正在加载选项”占位
+	var value = router_state.adblockPageParams.privateDns == null ? await fetchPrivateDnsMarker() : router_state.adblockPageParams.privateDns;
 	dropdown.innerHTML = '';
 
-	var value = router_state.adblockPageParams.privateDns == null ? await fetchPrivateDnsMarker() : router_state.adblockPageParams.privateDns;
 	router_state.adblockPageParams.privateDns = value;
 	var valueExists = false;
 
