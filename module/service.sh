@@ -275,12 +275,14 @@ run_qdisc_watchdog() {
     local mode="$2"
 	local sleep_interval="${3:-15}"
 	local target_qdisc=""
+	local target_algo=""
 
-	# 根据模式获取目标 qdisc
+	# 根据模式获取目标 qdisc 和算法（标记文件名即 wlan_<algo>_<qdisc>）
 	if [ "$mode" = "Wi-Fi" ]; then
 		for algo in $congestion_algorithms; do
 			for filepath in "$MODPATH/wlan_${algo}_"*; do
 				if [ -f "$filepath" ]; then
+					target_algo="$algo"
 					target_qdisc=$(extract_qdisc_from_path "$filepath" "$algo")
 					break 2
 				fi
@@ -290,6 +292,7 @@ run_qdisc_watchdog() {
 		for algo in $congestion_algorithms; do
 			for filepath in "$MODPATH/rmnet_data_${algo}_"*; do
 				if [ -f "$filepath" ]; then
+					target_algo="$algo"
 					target_qdisc=$(extract_qdisc_from_path "$filepath" "$algo")
 					break 2
 				fi
@@ -297,6 +300,9 @@ run_qdisc_watchdog() {
 		done
 	fi
 
+	if [ -z "$target_algo" ]; then
+        target_algo="cubic"
+    fi
 	if [ -z "$target_qdisc" ]; then
         if [ "$mode" = "Wi-Fi" ]; then target_qdisc="htb"; else target_qdisc="multiq"; fi
     fi
@@ -322,6 +328,13 @@ run_qdisc_watchdog() {
             
 			set_qdisc "$watch_iface" "$target_qdisc" "$mode"
 			set_max_initcwnd_initrwnd "$watch_iface"
+        fi
+
+        # 拥塞算法也被系统/其他模块改回去时一并恢复（之前只盯 qdisc）
+        local current_algo=$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)
+        if [ -n "$current_algo" ] && [ "$current_algo" != "$target_algo" ]; then
+            log_print "[!] 检测到拥塞算法被改回 $current_algo，正在恢复 $target_algo..."
+            echo "$target_algo" > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
         fi
         sleep "$sleep_interval"
     done
@@ -405,13 +418,13 @@ while true; do
 				# Start waiting for VoWiFi
 				vowifi_pending=1
 				vowifi_start_time="$current_time"
-				# 检测网络质量并自适应优化
-				detect_network_quality "$iface" "Wi-Fi"
+				# 检测网络质量（后台跑：只记日志，ping 最多卡 6 秒，不能堵主循环）
+				detect_network_quality "$iface" "Wi-Fi" &
 			elif [ "$new_mode" = "Cellular" ]; then
 				vowifi_pending=0
 				apply_cellular_settings "$iface"
-				# 检测网络质量并自适应优化
-				detect_network_quality "$iface" "Cellular"
+				# 检测网络质量（后台跑，同上）
+				detect_network_quality "$iface" "Cellular" &
 
 				run_qdisc_watchdog "$iface" "Cellular" "60" &
 				WATCHDOG_PID=$!

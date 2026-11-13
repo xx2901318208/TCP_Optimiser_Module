@@ -91,8 +91,9 @@ create_file_if_needed() {
 # Create wlan_* based on BBR availability
 create_file_if_needed "wlan" "$CONG" "$QDISC"
 
-# Always create rmnet_data_cubic unless another exists
-create_file_if_needed "rmnet_data" "cubic" "fq_codel"
+# 蜂窝和 Wi-Fi 一样用检测到的算法（有 bbr 就用 bbr，不再写死 cubic）；
+# 已有 rmnet_data_* 标记文件时跳过，不动用户现有的选择
+create_file_if_needed "rmnet_data" "$CONG" "$QDISC"
 
 if check_exists_anywhere "kill"; then
     # If file exists and KSU is true, copy any file from MODULEPATH with the same prefix

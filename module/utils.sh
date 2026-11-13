@@ -20,7 +20,7 @@ log_print() {
 
 	line_count=$(wc -l < "$LOGFILE" 2>/dev/null)
 	if [ "$line_count" -gt "$MAX_LOG_LINES" ]; then
-		tail -n "$((MAX_LOG_LINES / 2))" "$LOGFILE" > "${LOGFILE}.tmp"
+		tail -n "$MAX_LOG_LINES" "$LOGFILE" > "${LOGFILE}.tmp"
 		mv "${LOGFILE}.tmp" "$LOGFILE"
 	fi
 }
