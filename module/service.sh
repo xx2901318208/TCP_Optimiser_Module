@@ -234,7 +234,7 @@ apply_wifi_settings() {
 				set_qdisc "$iface" "$qdisc" "Wi-Fi"
 
 				set_max_initcwnd_initrwnd "$iface"
-				echo 8000 > /proc/sys/net/ipv4/tcp_rto_max 2>/dev/null
+				# rto_max 不再按接口覆盖，统一用 network_config.sh 的 10000ms
 				applied=1
 				break 2
 			fi
@@ -260,7 +260,7 @@ apply_cellular_settings() {
 				set_qdisc "$iface" "$qdisc" "Cellular"
 
 				set_max_initcwnd_initrwnd "$iface"
-				echo 15000 > /proc/sys/net/ipv4/tcp_rto_max 2>/dev/null
+				# rto_max 不再按接口覆盖，统一用 network_config.sh 的 10000ms
 				applied=1
 				break 2
 			fi
@@ -340,47 +340,23 @@ set_tcp_mem() {
 	log_print "tcp_mem set to: $low $pressure $high pages (mem_total=${mem_total_kb}KB)"
 }
 
-# 网络质量检测与自适应优化
+# 网络质量检测（只读：只测、只记日志，绝不据此改 sysctl）
+# 之前这里会按 ping 延迟改 tcp_fastopen/autocorking，还会把 tcp_rmem
+# 写成单个值 16384（这个文件要三个值）—— 2026-11-13 起全部删掉。
+# 想调参数请改 network_config.sh，不要让一次 ping 决定内核参数。
 detect_network_quality() {
 	local iface="$1"
 	local mode="$2"
-	
+
 	# 获取网络延迟（ping）
 	local latency=$(ping -c 1 -W 1 8.8.8.8 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}')
 	latency=${latency:-"N/A"}
-	
-	# 根据延迟调整参数
-	if [ "$latency" != "N/A" ]; then
-		latency_int=$(echo "$latency" | cut -d'.' -f1)
-		if [ "$latency_int" -lt 50 ]; then
-			# 低延迟网络（如 5G 或光纤）
-			echo 1 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-			echo 1 > /proc/sys/net/ipv4/tcp_autocorking 2>/dev/null
-			log_print " [+] 低延迟网络检测 ($latency ms) - 启用快速打开和自动 corking"
-		elif [ "$latency_int" -lt 150 ]; then
-			# 中等延迟网络
-			echo 1 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-			log_print " [+] 中等延迟网络检测 ($latency ms) - 启用快速打开"
-		else
-			# 高延迟网络
-			echo 0 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-			log_print " [~] 高延迟网络检测 ($latency ms) - 禁用快速打开"
-		fi
-	fi
-	
-	# 获取网络抖动
+	log_print "网络延迟检测 ($mode, $iface): $latency ms（仅记录，不调整参数）"
+
+	# 获取网络抖动（仅记录）
 	local jitter=$(ping -c 5 -W 1 8.8.8.8 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' | awk '{if(min==""){min=max=$1}; if($1>max) max=$1; if($1<min) min=$1} END {print max-min}')
 	jitter=${jitter:-"N/A"}
-	
-	if [ "$jitter" != "N/A" ]; then
-		jitter_int=$(echo "$jitter" | cut -d'.' -f1)
-		if [ "$jitter_int" -gt 50 ]; then
-			# 高抖动网络，增加缓冲区
-			echo 16384 > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
-			echo 16384 > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
-			log_print " [~] 高抖动网络检测 ($jitter ms) - 已增加 TCP 缓冲区"
-		fi
-	fi
+	log_print "网络抖动检测 ($mode, $iface): $jitter ms（仅记录，不调整参数）"
 }
 
 # Start Run Code
@@ -389,6 +365,9 @@ detect_network_quality() {
 . $MODPATH/network_config.sh
 apply_network_optimizations
 set_tcp_mem
+
+# 回读校验：关键值写完必须读回来记进日志，失败不再静默
+log_print "校验：拥塞算法=$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)，默认 qdisc=$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)，PLB=$(cat /proc/sys/net/ipv4/tcp_plb_enabled 2>/dev/null)，rto_max=$(cat /proc/sys/net/ipv4/tcp_rto_max 2>/dev/null)"
 
 last_mode=""
 change_time=0
@@ -407,7 +386,9 @@ while true; do
 
 	new_mode="none"
 	case "$iface" in
-		wlan*|tun*) new_mode="Wi-Fi" ;;
+		wlan*) new_mode="Wi-Fi" ;;
+		# tun* 是 VPN 虚拟接口，不是 Wi-Fi：单独归类，保留当前设置不重配
+		tun*) new_mode="VPN" ;;
 		*rmnet*|*ccmni*) new_mode="Cellular" ;;
 		*) new_mode="none" ;;
 	esac
@@ -434,6 +415,9 @@ while true; do
 
 				run_qdisc_watchdog "$iface" "Cellular" "60" &
 				WATCHDOG_PID=$!
+			elif [ "$new_mode" = "VPN" ]; then
+				vowifi_pending=0
+				log_print "[INFO] VPN 接口 ($iface)，保留当前 TCP 设置，不重新应用。"
 			elif [ "$new_mode" = "none" ]; then
                 vowifi_pending=0
                 log_print "[INFO] 接口完全断开（飞行模式/互联网关闭）。"

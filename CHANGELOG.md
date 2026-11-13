@@ -1,3 +1,14 @@
+## v4.5（2026-11-13，真机 6.6.118 / Android 17 核对后）
+1. 删掉不存在的 sysctl：`tcp_priority`、`tcp_mptcp`、`tcp_mem_pressure`、`tcp_congestion_control_algo`、`tcp_thin_dupack`，以及不存在的 `net/ipv6/tcp_rmem`、`tcp_wmem`；删掉已被 RACK 接管的遗留项 `tcp_fack`、`tcp_early_retrans`。
+2. PLB 参数名按 6.6 内核改对：`tcp_plb_idle_retransmit_rounds` / `tcp_plb_retransmit_threshold` → `tcp_plb_idle_rehash_rounds` / `tcp_plb_rehash_rounds`。
+3. MPTCP 明确不启用：这台内核无 CONFIG_MPTCP，且有 CVE-2026-98432 前科。
+4. `update.json` 修正：之前仍指向上游 fatalcoder524 的 v2.5/17，现改为本仓库 v4.5/22。
+5. `system.prop` 不再硬写 `bbr`（与 post-fs-data 的 bbr3 检测打架），只留 `default_qdisc=fq_codel`；算法只由 post-fs-data 定一次。
+6. 网络质量检测改为只读：不再按 ping 改 `tcp_fastopen`/`tcp_autocorking`，不再把 `tcp_rmem` 写成单值。
+7. `tun*` 不再误判为 Wi-Fi：VPN 接口单独归类，保留当前设置不重配。
+8. `tcp_rto_max` 全模块统一为 10000ms，不再按 Wi-Fi/蜂窝各写各的（8000/15000）。
+9. 所有 sysctl 写入先判文件存在；启动时回读拥塞算法、默认 qdisc、PLB、rto_max 写进日志，失败不再静默。
+
 1. 修复 multiq total_bands 检测问题。
 2. 更新 service.sh 时序以防止某些竞争条件。[OnePlus 设备]
 3. 如果 post-fs-data.d 目录不存在则创建。

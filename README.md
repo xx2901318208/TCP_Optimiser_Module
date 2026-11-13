@@ -12,8 +12,14 @@
 1. 根据接口（Wi-Fi/蜂窝数据）设置 TCP 拥塞控制算法。
 2. 接口切换时自动更改 TCP 拥塞控制算法。
 3. 将 initcwnd 和 initrwnd 值设置为最大值。
-4. **网络质量检测**：自动检测网络延迟和抖动，根据网络状况优化参数。
-5. **Android 17+ 支持**：支持新内核特性（如 MPTCP、TCP 优先级等）。
+4. **网络质量检测**：只测只记（延迟/抖动写进日志），不再据此改任何 sysctl。
+5. **Android 17 实测**：内核 6.6.118-android15-8 上可用算法只有 reno/bbr/cubic（无 bbr3），默认 qdisc fq_codel，无 MPTCP；MPTCP 明确不启用。
+
+# 实测环境（2026-11-13）
+- 内核：`6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k`，Android 17
+- `tcp_available_congestion_control`：`reno bbr cubic`
+- 当前算法：`bbr`，`default_qdisc`：`fq_codel`
+- 不存在：`tcp_priority`、`tcp_mptcp`、`tcp_mem_pressure`、`tcp_congestion_control_algo`、`tcp_thin_dupack`、`net.mptcp.*`；PLB 在 6.6 上叫 `tcp_plb_idle_rehash_rounds` / `tcp_plb_rehash_rounds`
 6. **智能参数调整**：根据 Wi-Fi 频段自动调整 TCP pacing 参数。
 7. **系统信息记录**：启动时记录系统信息，便于调试。
 8. **代码优化**：集中管理网络配置，减少代码重复。
