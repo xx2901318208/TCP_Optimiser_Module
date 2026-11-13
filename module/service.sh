@@ -264,16 +264,24 @@ apply_wifi_settings() {
 		log_print "[!] 未读到 Wi-Fi 频段（iw link 无 freq），跳过频段 pacing"
 	fi
 	if [ -n "$freq" ]; then
-		if [ "$freq" -lt 3000 ]; then
+		# iw 给的 freq 带小数（5240.0）：shell 的 -lt 只认整数，带小数
+		# 直接报错、两个判断都落空，全掉进 6GHz 分支——5GHz 的连上也
+		# 会按 6GHz 的 pacing 跑。先截掉小数再比。
+		# 分界用 5925：5GHz 最高到 5825，6GHz 从 5925 起；用 6000 会把
+		# 5955/5975 这些 6GHz 信道也认成 5GHz。
+		freq_int=${freq%%.*}
+		if ! [ "$freq_int" -eq "$freq_int" ] 2>/dev/null; then
+			log_print "[!] Wi-Fi 频段读数异常（$freq），跳过频段 pacing"
+		elif [ "$freq_int" -lt 3000 ]; then
 			# 2.4 GHz
 			set_tcp_pacing 150 200
 			log_print " [+] 2.4GHz 频段优化已应用"
-		elif [ "$freq" -lt 6000 ]; then
-			# 5 GHz or higher
+		elif [ "$freq_int" -lt 5925 ]; then
+			# 5 GHz
 			set_tcp_pacing 200 300
 			log_print " [+] 5GHz 频段优化已应用"
 		else
-			# 6 GHz or higher
+			# 6 GHz
 			set_tcp_pacing 250 350
 			log_print " [+] 6GHz 频段优化已应用"
 		fi
