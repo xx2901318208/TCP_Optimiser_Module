@@ -5,7 +5,13 @@
   margin-bottom: 12px;
 }
 
-.clear-btn {
+.logs-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.clear-btn,
+.copy-btn {
   padding: 6px 12px;
   background-color: transparent;
   border: 1px solid var(--primary);
@@ -27,12 +33,21 @@
   padding: 12px;
   flex: 1;
   overflow-y: auto;
+  /* 横向不许溢出：以前长行（链接、长数字、接口列表）会把整页撑宽，
+     手机上变成左右都能滑的“宽屏”，复制时也很难选中 */
+  overflow-x: hidden;
   font-family: monospace;
   font-size: 0.9rem;
+  line-height: 1.5;
   color: var(--text-secondary);
   margin-bottom: var(--spacing);
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .log-content > div {
   margin-top: 3px;
+  /* 长词（链接、长数字）也允许在任意位置断行，不再撑宽页面 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
