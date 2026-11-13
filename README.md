@@ -36,6 +36,7 @@
 3. 创建一个名为 `initcwnd_initrwnd` 的空文件，将 initcwnd 和 initrwnd 值设置为最大值。
 4. 创建一个名为 `kill_connections` 的空文件，在切换时断开所有连接。[请小心！]
 5. 创建一个名为 `force_apply` 的空文件，立即应用更改。
+6. 创建一个名为 `wifi_powersave_off` 的空文件，在连 Wi-Fi 时关闭 Wi-Fi 省电（降低游戏/语音的空闲唤醒延迟，但更费电；也可以在 WebUI 设置页开关）。
 
 # 通过 WebUI 调整模块设置
 所有模块设置都可以通过 KSU 和 APatch 的模块 WebUI 或 Magisk 的 KsuWebUIStandalone 应用来控制。

@@ -60,6 +60,14 @@
 		  <span class="slider"></span>
 		</label>
 	  </div>
+
+	  <div class="setting-group toggle-container">
+		<label id="wifi-powersave-off-label" for="wifi-powersave-off">关闭 Wi-Fi 省电（低延迟，费电）</label>
+		<label class="toggle">
+		  <input type="checkbox" id="wifi-powersave-off">
+		  <span class="slider"></span>
+		</label>
+	  </div>
 	</div>
   </div>
   
@@ -83,7 +91,7 @@
         <tr><td>Wi-Fi + 稳定优先</td><td>cubic</td><td>fq_codel</td></tr>
         <tr><td>5G 蜂窝</td><td>bbr</td><td>fq_codel</td></tr>
         <tr><td>4G 蜂窝</td><td>cubic</td><td>fq_codel</td></tr>
-        <tr><td>游戏/低延迟</td><td>bbr</td><td>cake</td></tr>
+        <tr><td>游戏/低延迟</td><td>bbr</td><td>fq_codel</td></tr>
       </table>
     </div>
   </div>

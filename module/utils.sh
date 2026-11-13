@@ -60,9 +60,23 @@ run_tc() {
 get_wifi_calling_state() {
 	rm -f "$DUMPSYS_TMP_FILE"
 	dumpsys activity service SystemUIService > "$DUMPSYS_TMP_FILE" 2>/dev/null
-	grep -qEm 1 "slot='vowifi'.*visible user=.*" "$DUMPSYS_TMP_FILE"
-	local status=$?
+	# echo 的返回值：0 = VoWiFi 已激活，1 = 未激活但可能激活（继续等），
+	# 2 = 本机未开通 VoWiFi（不用等）
+	# 激活判断要认两种格式：AOSP 的 slot='vowifi'，和 ColorOS/Oplus 的
+	# vowifiState=true（这台手机的 dump 里只有后一种，前一种永远匹配不到，
+	# 导致每次连 Wi-Fi 都白等满 20 秒）。
+	if grep -qEm 1 "slot='vowifi'.*visible user=.*" "$DUMPSYS_TMP_FILE" || grep -q "vowifiState=true" "$DUMPSYS_TMP_FILE"; then
+		rm -f "$DUMPSYS_TMP_FILE"
+		echo 0
+		return
+	fi
+	# Oplus 机型上两张卡都是 shouldShowVowifi=false 时，VoWiFi 根本没开通，
+	# 等 20 秒也没有意义；AOSP 的 dump 里没有 shouldShowVowifi 这行，不受影响。
+	if grep -q "shouldShowVowifi=false" "$DUMPSYS_TMP_FILE" && ! grep -q "shouldShowVowifi=true" "$DUMPSYS_TMP_FILE"; then
+		rm -f "$DUMPSYS_TMP_FILE"
+		echo 2
+		return
+	fi
 	rm -f "$DUMPSYS_TMP_FILE"
-	# echo's result: 0 = true (VoWiFi active), 1 = false
-	echo $status
+	echo 1
 }

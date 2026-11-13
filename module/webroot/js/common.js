@@ -114,9 +114,10 @@ export async function get_wifi_calling_state() {
     // Run dumpsys and save to file
     await exec(`dumpsys activity service SystemUIService > "${DUMPSYS_TMP_FILE}" 2>/dev/null`);
 
-    // Check for VoWiFi pattern
+    // Check for VoWiFi pattern: AOSP slot format, or ColorOS/Oplus
+    // vowifiState=true (this device's dump only has the latter)
      const { stdout: returnCode } = await exec(`
-      grep -qE "slot=\'vowifi\'.*visible user=.*" "${DUMPSYS_TMP_FILE}" && echo $?`
+      grep -qE "slot=\'vowifi\'.*visible user=.*|vowifiState=true" "${DUMPSYS_TMP_FILE}" && echo $?`
     );
 
     // Clean up temp file

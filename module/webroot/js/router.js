@@ -24,6 +24,7 @@ const router_state = {
 		rmnetQdisc: null,
 		killConnections: null,
 		initcwndInitrwnd: null,
+		wifiPowersaveOff: null,
 	},
 	logsList: [],
 	available_algorithms: [],
@@ -56,6 +57,9 @@ const realtimeUpdater = async () => {
 		
 		if(router_state.settingsPageParams.initcwndInitrwnd == null)
 			router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd");
+
+		if(router_state.settingsPageParams.wifiPowersaveOff == null)
+			router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
 
 		if(currentPageStyle != null)
 		{

@@ -181,6 +181,7 @@ export async function initSettings() {
 	const cellularQdisc = document.getElementById('cellular-qdisc');
 	const killConnections = document.getElementById('kill-connections');
 	const initcwndInitrwnd = document.getElementById('initcwnd-initrwnd');
+	const wifiPowersaveOff = document.getElementById('wifi-powersave-off');
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
 	
@@ -196,12 +197,16 @@ export async function initSettings() {
 	if(router_state.settingsPageParams.initcwndInitrwnd == null)
 		router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd");
 	
+	if(router_state.settingsPageParams.wifiPowersaveOff == null)
+		router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
+	
 	await populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo");
 	await populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc");
 	await populateDropdown(cellularAlgo, router_state.available_algorithms, "rmnet_data", "algo");
 	await populateDropdown(cellularQdisc, router_state.available_qdiscs, "rmnet_data", "qdisc");
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;
+	wifiPowersaveOff.checked = router_state.settingsPageParams.wifiPowersaveOff;
 
 	async function applySettings() {
 		const settings = {
@@ -211,6 +216,7 @@ export async function initSettings() {
 			cellularQdisc: cellularQdisc.value,
 			killOnChange: killConnections.checked,
 			setInitcwndInitrwndOnChange: initcwndInitrwnd.checked,
+			wifiPowersaveOff: wifiPowersaveOff.checked,
 		};
 		
 		try
@@ -219,6 +225,7 @@ export async function initSettings() {
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/rmnet_data_*`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/kill_connections`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
+			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
 			
 			await exec(`touch ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
 			await exec(`touch ${router_state.moduleInformation.moduleDir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc}`);
@@ -228,6 +235,9 @@ export async function initSettings() {
 			if(settings.setInitcwndInitrwndOnChange)
 				await exec(`touch ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd && chmod 644 ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
 
+			if(settings.wifiPowersaveOff)
+				await exec(`touch ${router_state.moduleInformation.moduleDir}/wifi_powersave_off && chmod 644 ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
+
 			console.log('Applied settings:', settings);
 		
 		router_state.settingsPageParams.wifiAlgo = settings.wifiAlgorithm;
@@ -236,8 +246,9 @@ export async function initSettings() {
 		router_state.settingsPageParams.rmnetQdisc = settings.cellularQdisc;
 		router_state.settingsPageParams.killConnections = settings.killOnChange;
 		router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
+		router_state.settingsPageParams.wifiPowersaveOff = settings.wifiPowersaveOff;
 		toast("设置已成功应用！");
-		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}`);
+		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}, wifi_powersave_off=${settings.wifiPowersaveOff}`);
 		return 0;
 	} catch (error) {
 		console.error('Error applying settings:', error);
