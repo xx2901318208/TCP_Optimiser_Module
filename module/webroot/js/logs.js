@@ -8,9 +8,12 @@ let prev_logs_count = 0;
 export async function addLog(message) {
 	try
 	{
-		const LOGFILE = `${router_state.moduleInformation.moduleDir}/service.log`;
+		// 模块目录一般在启动时就备好了；万一调用时还没备好，
+		// 用固定路径兜底（readModuleProp 里也是这个写死的路径）。
+		const dir = router_state.moduleInformation ? router_state.moduleInformation.moduleDir : "/data/adb/modules/tcp_optimiser";
+		const LOGFILE = `${dir}/service.log`;
 		const MAX_LOG_LINES = 200;
-		await exec(`echo "${formatLocalDateTime()} - ${message}" >> ${router_state.moduleInformation.moduleDir}/service.log`);
+		await exec(`echo "${formatLocalDateTime()} - ${message}" >> ${dir}/service.log`);
 		// Count lines in the log file
 		const { stdout: lineCountOutput } = await exec(`wc -l < ${LOGFILE}`);
 		let lineCount = parseInt(lineCountOutput.trim(), 10);
@@ -31,7 +34,8 @@ export async function addLog(message) {
 
 export async function read_log_file() {
 	try {
-		const { stdout: logs } = await exec(`cat ${router_state.moduleInformation.moduleDir}/service.log`);
+		const dir = router_state.moduleInformation ? router_state.moduleInformation.moduleDir : "/data/adb/modules/tcp_optimiser";
+		const { stdout: logs } = await exec(`cat ${dir}/service.log`);
 		router_state.logsList = logs.trim().split('\n').filter(line => line.length > 0);
 	} catch (error) {
 		console.error('Error reading log file: ', error);
@@ -128,4 +132,9 @@ export async function initLogs() {
 	router_state.isInitializing = false;
 	await read_log_file();
 	updateLogsUI();
+	// 文件为空时给一行可见提示，不然页面全白、看不出是“没记录”
+	// 还是“读失败了”。有记录后下一次刷新会整页重绘把它顶掉。
+	if (router_state.logsList.length === 0) {
+		addLogToScreen('暂无日志记录（service.log 为空，或模块服务还没写过日志）。');
+	}
 }

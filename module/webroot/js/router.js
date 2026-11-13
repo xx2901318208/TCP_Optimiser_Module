@@ -53,25 +53,31 @@ function setCSS(pageName) {
 
 const realtimeUpdater = async () => {
 	try {
+		// 首轮读取并行跑：状态、日志、5 个标记文件互不依赖，
+		// 原先一个接一个等十几个 shell，首页和日志页都要等完整一串。
+		const fetchMarkers = async () => {
+			if(router_state.settingsPageParams.killConnections == null)
+				router_state.settingsPageParams.killConnections = await fetchIsConfigFile("kill_connections");
+
+			if(router_state.settingsPageParams.initcwndInitrwnd == null)
+				router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd");
+
+			if(router_state.settingsPageParams.wifiPowersaveOff == null)
+				router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
+
+			if(router_state.adblockPageParams.adblockHosts == null)
+				router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
+
+			if(router_state.adblockPageParams.privateDns == null)
+				router_state.adblockPageParams.privateDns = await fetchPrivateDnsMarker();
+		};
+
 		// First Read
-		await updateModuleStatus();
-		await read_log_file();
-		
-		// Fetch Settings Value
-		if(router_state.settingsPageParams.killConnections == null)
-			router_state.settingsPageParams.killConnections = await fetchIsConfigFile("kill_connections");
-		
-		if(router_state.settingsPageParams.initcwndInitrwnd == null)
-			router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd");
-
-		if(router_state.settingsPageParams.wifiPowersaveOff == null)
-			router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
-
-		if(router_state.adblockPageParams.adblockHosts == null)
-			router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
-
-		if(router_state.adblockPageParams.privateDns == null)
-			router_state.adblockPageParams.privateDns = await fetchPrivateDnsMarker();
+		await Promise.all([
+			updateModuleStatus(),
+			read_log_file(),
+			fetchMarkers(),
+		]);
 
 		if(currentPageStyle != null)
 		{
@@ -88,8 +94,10 @@ const realtimeUpdater = async () => {
 		}
 		
 		setInterval(async () => {
-			await updateModuleStatus();
-			await read_log_file();
+			await Promise.all([
+				updateModuleStatus(),
+				read_log_file(),
+			]);
 			if(currentPageStyle != null)
 			{
 				switch(router_state.current_active_page)

@@ -13,15 +13,26 @@ export async function updateModuleStatus () {
 	var active_InitcwndInitrwndValue = [];
 	try
 	{
-		module_status = (await getModuleActiveState()) == true ? "已启用 ✅" : "已禁用 ❌";
-		active_iface = await get_active_iface();
-		active_iface = active_iface ? active_iface : "None";
+		// 原先这里 6 个状态查询一个接一个等（模块状态、接口、算法、
+		// initcwnd、Private DNS，Wi-Fi 时还要再加 dumpsys 查 VoWiFi），
+		// 每 5 秒的刷新和首次加载都要等完整一串。互不依赖的并行跑，
+		// 只有 qdisc 需要先拿到接口名、VoWiFi 需要先知道是不是 Wi-Fi，
+		// 这两个放第二轮。
+		const [moduleActive, ifaceRaw, algoRaw, initcwndInitrwnd, dnsState] = await Promise.all([
+			getModuleActiveState(),
+			get_active_iface(),
+			get_active_algorithm(),
+			getInitcwndInitrwndValue(),
+			get_private_dns_state(),
+		]);
+		module_status = moduleActive == true ? "已启用 ✅" : "已禁用 ❌";
+		active_iface = ifaceRaw ? ifaceRaw : "None";
 		active_iface_type = active_iface.match("rmnet") || active_iface.match("ccmni") ? "蜂窝数据 📶" : active_iface.startsWith("wlan") || active_iface.startsWith("tun") ? "Wi-Fi 🛜" : "未知 ⁉️";
-		active_algorithm = await get_active_algorithm();
+		active_algorithm = algoRaw;
 		var active_qdisc_tmp = await get_active_qdisc(active_iface);
 		active_qdisc = active_qdisc_tmp ? active_qdisc_tmp : active_qdisc;
-		active_InitcwndInitrwndValue = await getInitcwndInitrwndValue();
-		private_dns_state = await get_private_dns_state();
+		active_InitcwndInitrwndValue = initcwndInitrwnd;
+		private_dns_state = dnsState;
 		if(active_iface_type == "Wi-Fi 🛜")
 		{
 			wifi_calling_state = await get_wifi_calling_state() ? "活跃 ": "未活跃 ";

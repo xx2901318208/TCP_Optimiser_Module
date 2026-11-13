@@ -22,8 +22,13 @@ body {
   min-height: 100vh;
   position: relative;
   padding: var(--spacing);
-  padding-top: var(--window-inset-top);
-  padding-bottom: var(--window-inset-bottom);
+  /* 顶部：--window-inset-top 来自远程 insets.css，加载失败时变量不存在，
+     原先写死 var(--window-inset-top) 会失效，只剩 16px，标题直接顶到
+     状态栏下面被遮住。给了 28px 下限（状态栏高度），有刘海时取更大的 inset 值。
+     底部同理：导航栏是 fixed 悬浮的，原先底部只留 inset（或 16px），
+     每页最后一段内容都被导航栏盖住，改成至少留出导航栏高度 + 间距。 */
+  padding-top: max(var(--window-inset-top, 0px), 28px);
+  padding-bottom: calc(var(--footer-height) + var(--window-inset-bottom, 0px) + var(--spacing));
 }
 
 .container {
@@ -55,7 +60,8 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--footer-height);
+  height: calc(var(--footer-height) + var(--window-inset-bottom, 0px));
+  padding-bottom: var(--window-inset-bottom, 0px);
   background-color: var(--card-bg);
   display: flex;
   justify-content: space-around;

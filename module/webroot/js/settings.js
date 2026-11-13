@@ -185,25 +185,23 @@ export async function initSettings() {
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
 	
-	if(router_state.available_algorithms.length == 0)
-		await fetchAvailableAlgorithms();
-	
-	if(router_state.available_qdiscs.length == 0)
-		await fetchAvailableQdiscs();
-	
-	if(router_state.settingsPageParams.killConnections == null)
-		router_state.settingsPageParams.killConnections = await fetchIsConfigFile("kill_connections");
-	
-	if(router_state.settingsPageParams.initcwndInitrwnd == null)
-		router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd");
-	
-	if(router_state.settingsPageParams.wifiPowersaveOff == null)
-		router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
-	
-	await populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo");
-	await populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc");
-	await populateDropdown(cellularAlgo, router_state.available_algorithms, "rmnet_data", "algo");
-	await populateDropdown(cellularQdisc, router_state.available_qdiscs, "rmnet_data", "qdisc");
+	// 原先这里 9 个 shell 命令一个接一个等（算法、队列、3 个标记文件、
+	// 4 个下拉框取值），每个都要等 shell 起起来，点设置要卡好几秒。
+	// 这些读取互不依赖，并行跑，总耗时只剩最慢的那一个。
+	await Promise.all([
+		(async () => { if(router_state.available_algorithms.length == 0) await fetchAvailableAlgorithms(); })(),
+		(async () => { if(router_state.available_qdiscs.length == 0) await fetchAvailableQdiscs(); })(),
+		(async () => { if(router_state.settingsPageParams.killConnections == null) router_state.settingsPageParams.killConnections = await fetchIsConfigFile("kill_connections"); })(),
+		(async () => { if(router_state.settingsPageParams.initcwndInitrwnd == null) router_state.settingsPageParams.initcwndInitrwnd = await fetchIsConfigFile("initcwnd_initrwnd"); })(),
+		(async () => { if(router_state.settingsPageParams.wifiPowersaveOff == null) router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off"); })(),
+	]);
+
+	await Promise.all([
+		populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo"),
+		populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc"),
+		populateDropdown(cellularAlgo, router_state.available_algorithms, "rmnet_data", "algo"),
+		populateDropdown(cellularQdisc, router_state.available_qdiscs, "rmnet_data", "qdisc"),
+	]);
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;
 	wifiPowersaveOff.checked = router_state.settingsPageParams.wifiPowersaveOff;
@@ -221,22 +219,25 @@ export async function initSettings() {
 		
 		try
 		{
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/wlan_*`);
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/rmnet_data_*`);
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/kill_connections`);
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
-			
-			await exec(`touch ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
-			await exec(`touch ${router_state.moduleInformation.moduleDir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc}`);
+			// 原先这里十几个 shell 命令一个接一个等，点应用也要卡几秒。
+			// 合并成两条命令：一条删旧标记，一条写新标记。
+			const dir = router_state.moduleInformation.moduleDir;
+			await exec(`rm -f ${dir}/wlan_* ${dir}/rmnet_data_* ${dir}/kill_connections ${dir}/initcwnd_initrwnd ${dir}/wifi_powersave_off`);
+
+			const touches = [];
+			touches.push(`touch ${dir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${dir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
+			touches.push(`touch ${dir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc} && chmod 644 ${dir}/rmnet_data_${settings.cellularAlgorithm}_${settings.cellularQdisc}`);
 			if(settings.killOnChange)
-				await exec(`touch ${router_state.moduleInformation.moduleDir}/kill_connections && chmod 644 ${router_state.moduleInformation.moduleDir}/kill_connections`);
+				touches.push(`touch ${dir}/kill_connections && chmod 644 ${dir}/kill_connections`);
 
 			if(settings.setInitcwndInitrwndOnChange)
-				await exec(`touch ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd && chmod 644 ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
+				touches.push(`touch ${dir}/initcwnd_initrwnd && chmod 644 ${dir}/initcwnd_initrwnd`);
 
 			if(settings.wifiPowersaveOff)
-				await exec(`touch ${router_state.moduleInformation.moduleDir}/wifi_powersave_off && chmod 644 ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
+				touches.push(`touch ${dir}/wifi_powersave_off && chmod 644 ${dir}/wifi_powersave_off`);
+
+			if(touches.length > 0)
+				await exec(touches.join(' ; '));
 
 			console.log('Applied settings:', settings);
 		

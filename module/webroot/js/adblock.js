@@ -58,14 +58,19 @@ export async function initAdblock() {
 
 		try
 		{
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/adblock_hosts`);
-			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/private_dns_*`);
+			// 和设置页一样：删旧标记、写新标记各合并成一条命令，少等几次 shell。
+			const dir = router_state.moduleInformation.moduleDir;
+			await exec(`rm -f ${dir}/adblock_hosts ${dir}/private_dns_*`);
 
+			const touches = [];
 			if(settings.adblockHosts)
-				await exec(`touch ${router_state.moduleInformation.moduleDir}/adblock_hosts && chmod 644 ${router_state.moduleInformation.moduleDir}/adblock_hosts`);
+				touches.push(`touch ${dir}/adblock_hosts && chmod 644 ${dir}/adblock_hosts`);
 
 			if(settings.privateDns && settings.privateDns != "off")
-				await exec(`touch ${router_state.moduleInformation.moduleDir}/private_dns_${settings.privateDns} && chmod 644 ${router_state.moduleInformation.moduleDir}/private_dns_${settings.privateDns}`);
+				touches.push(`touch ${dir}/private_dns_${settings.privateDns} && chmod 644 ${dir}/private_dns_${settings.privateDns}`);
+
+			if(touches.length > 0)
+				await exec(touches.join(' ; '));
 
 			console.log('Applied adblock settings:', settings);
 
