@@ -14,8 +14,14 @@
   flex: 1;
 }
 
-#kill-connections-label, #initcwnd-initrwnd-label {
+#kill-connections-label, #initcwnd-initrwnd-label, #wifi-powersave-off-label, #adblock-hosts-label {
   color: var(--text-secondary);
+}
+
+.setting-note {
+  font-size: 0.85rem;
+  color: #ffb74d;
+  line-height: 1.5;
 }
 
 .dropdown {

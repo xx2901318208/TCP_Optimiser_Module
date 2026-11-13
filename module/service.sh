@@ -396,6 +396,37 @@ apply_private_dns() {
 	log_print " [+] Private DNS 已设为 $hostname"
 }
 
+# hosts 去广告（标记文件 adblock_hosts，默认不开）：
+# 开关打开时把模块自带的 hosts 列表（StevenBlack，广告+恶意域名）
+# bind 挂载到 /system/etc/hosts；关掉时卸载恢复原样。
+# 注意：和 Private DNS 不要同时开，两者叠加优先级不明确。
+apply_hosts_block() {
+	if [ -f "$MODPATH/adblock_hosts" ]; then
+		[ -f "$MODPATH/hosts" ] || return 0
+		# 已经是我们的挂载就不用重复挂
+		if grep -q "^$MODPATH/hosts /system/etc/hosts " /proc/mounts 2>/dev/null; then
+			return 0
+		fi
+		# 别的工具已经挂了 hosts（AdAway / Systemless Hosts 等）时不抢，
+		# 免得两个 hosts 文件打架
+		if grep -q " /system/etc/hosts " /proc/mounts 2>/dev/null; then
+			log_print "[!] /system/etc/hosts 已被其他工具挂载，hosts 去广告未启用（请先关掉 AdAway / Systemless Hosts）"
+			return 0
+		fi
+		mount --bind "$MODPATH/hosts" /system/etc/hosts 2>/dev/null
+		if grep -q "^$MODPATH/hosts /system/etc/hosts " /proc/mounts 2>/dev/null; then
+			log_print " [+] hosts 去广告已开启（StevenBlack，$(grep -c "^0\.0\.0\.0" "$MODPATH/hosts" 2>/dev/null) 条规则）"
+		else
+			log_print "[!] hosts 去广告挂载失败"
+		fi
+	else
+		if grep -q "^$MODPATH/hosts /system/etc/hosts " /proc/mounts 2>/dev/null; then
+			umount /system/etc/hosts 2>/dev/null
+			log_print " [+] hosts 去广告已关闭，恢复系统 hosts"
+		fi
+	fi
+}
+
 # 网络质量检测（只读：只测、只记日志，绝不据此改 sysctl）
 # 之前这里会按 ping 延迟改 tcp_fastopen/autocorking，还会把 tcp_rmem
 # 写成单个值 16384（这个文件要三个值）—— 2026-11-13 起全部删掉。
@@ -453,6 +484,8 @@ while true; do
 		if [ "$((current_time - change_time))" -ge "$DEBOUNCE_TIME" ] || [ "$last_mode" = "none" ]; then
 			# Private DNS 和接口无关：开机、切网、强制应用时都按标记文件写一次
 			apply_private_dns
+			# hosts 去广告同样和接口无关
+			apply_hosts_block
 			
 			if [ -n "$WATCHDOG_PID" ]; then
 				kill "$WATCHDOG_PID" 2>/dev/null

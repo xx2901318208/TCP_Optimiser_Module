@@ -26,6 +26,7 @@ const router_state = {
 		killConnections: null,
 		initcwndInitrwnd: null,
 		wifiPowersaveOff: null,
+		adblockHosts: null,
 		privateDns: null,
 	},
 	logsList: [],
@@ -62,6 +63,9 @@ const realtimeUpdater = async () => {
 
 		if(router_state.settingsPageParams.wifiPowersaveOff == null)
 			router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
+
+		if(router_state.settingsPageParams.adblockHosts == null)
+			router_state.settingsPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
 
 		if(router_state.settingsPageParams.privateDns == null)
 			router_state.settingsPageParams.privateDns = await fetchPrivateDnsMarker();

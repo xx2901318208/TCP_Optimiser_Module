@@ -54,6 +54,10 @@
 		</div>
 	  </div>
 
+	  <div class="setting-group">
+		<span class="setting-note">建议：Private DNS 和 hosts 去广告不要同时开。两者叠加时哪个先生效不明确，出了问题也难排查；用 hosts 去广告时，把 Private DNS 选成“恢复系统默认”或“关闭（不管理）”。</span>
+	  </div>
+
 	  <div class="setting-group toggle-container">
 		<label id="kill-connections-label" for="kill-connections">切换时断开连接</label>
 		<label class="toggle">
@@ -74,6 +78,14 @@
 		<label id="wifi-powersave-off-label" for="wifi-powersave-off">关闭 Wi-Fi 省电（低延迟，费电）</label>
 		<label class="toggle">
 		  <input type="checkbox" id="wifi-powersave-off">
+		  <span class="slider"></span>
+		</label>
+	  </div>
+
+	  <div class="setting-group toggle-container">
+		<label id="adblock-hosts-label" for="adblock-hosts">去广告（hosts）</label>
+		<label class="toggle">
+		  <input type="checkbox" id="adblock-hosts">
 		  <span class="slider"></span>
 		</label>
 	  </div>

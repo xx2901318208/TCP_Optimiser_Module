@@ -218,6 +218,7 @@ export async function initSettings() {
 	const killConnections = document.getElementById('kill-connections');
 	const initcwndInitrwnd = document.getElementById('initcwnd-initrwnd');
 	const wifiPowersaveOff = document.getElementById('wifi-powersave-off');
+	const adblockHosts = document.getElementById('adblock-hosts');
 	const privateDns = document.getElementById('private-dns');
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
@@ -236,6 +237,9 @@ export async function initSettings() {
 	
 	if(router_state.settingsPageParams.wifiPowersaveOff == null)
 		router_state.settingsPageParams.wifiPowersaveOff = await fetchIsConfigFile("wifi_powersave_off");
+
+	if(router_state.settingsPageParams.adblockHosts == null)
+		router_state.settingsPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
 	
 	await populateDropdown(wifiAlgo, router_state.available_algorithms, "wlan", "algo");
 	await populateDropdown(wifiQdisc, router_state.available_qdiscs, "wlan", "qdisc");
@@ -245,6 +249,7 @@ export async function initSettings() {
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;
 	wifiPowersaveOff.checked = router_state.settingsPageParams.wifiPowersaveOff;
+	adblockHosts.checked = router_state.settingsPageParams.adblockHosts;
 
 	async function applySettings() {
 		const settings = {
@@ -255,6 +260,7 @@ export async function initSettings() {
 			killOnChange: killConnections.checked,
 			setInitcwndInitrwndOnChange: initcwndInitrwnd.checked,
 			wifiPowersaveOff: wifiPowersaveOff.checked,
+			adblockHosts: adblockHosts.checked,
 			privateDns: privateDns.value,
 		};
 		
@@ -265,6 +271,7 @@ export async function initSettings() {
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/kill_connections`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/initcwnd_initrwnd`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
+			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/adblock_hosts`);
 			await exec(`rm -f ${router_state.moduleInformation.moduleDir}/private_dns_*`);
 			
 			await exec(`touch ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${router_state.moduleInformation.moduleDir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
@@ -278,6 +285,9 @@ export async function initSettings() {
 			if(settings.wifiPowersaveOff)
 				await exec(`touch ${router_state.moduleInformation.moduleDir}/wifi_powersave_off && chmod 644 ${router_state.moduleInformation.moduleDir}/wifi_powersave_off`);
 
+			if(settings.adblockHosts)
+				await exec(`touch ${router_state.moduleInformation.moduleDir}/adblock_hosts && chmod 644 ${router_state.moduleInformation.moduleDir}/adblock_hosts`);
+
 			if(settings.privateDns && settings.privateDns != "off")
 				await exec(`touch ${router_state.moduleInformation.moduleDir}/private_dns_${settings.privateDns} && chmod 644 ${router_state.moduleInformation.moduleDir}/private_dns_${settings.privateDns}`);
 
@@ -290,9 +300,10 @@ export async function initSettings() {
 		router_state.settingsPageParams.killConnections = settings.killOnChange;
 		router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
 		router_state.settingsPageParams.wifiPowersaveOff = settings.wifiPowersaveOff;
+		router_state.settingsPageParams.adblockHosts = settings.adblockHosts;
 		router_state.settingsPageParams.privateDns = settings.privateDns;
 		toast("设置已成功应用！");
-		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}, wifi_powersave_off=${settings.wifiPowersaveOff}, private_dns=${settings.privateDns}`);
+		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange}, wifi_powersave_off=${settings.wifiPowersaveOff}, adblock_hosts=${settings.adblockHosts}, private_dns=${settings.privateDns}`);
 		return 0;
 	} catch (error) {
 		console.error('Error applying settings:', error);
