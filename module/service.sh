@@ -530,10 +530,10 @@ apply_wifi7_unlock() {
 apply_private_dns() {
 	local marker hostname current_mode current_host applied_host
 	marker=$(ls "$MODPATH"/private_dns_* 2>/dev/null | head -n1)
-	# 没有标记 = 不管理：同时清掉下面两处状态文件，别留脏状态。
+	# 没有标记 = 不管理：同时清掉状态文件，别留脏状态。
 	# （状态文件特意不叫 private_dns_*，不然会被上面这行 ls 当成标记。）
 	if [ -z "$marker" ]; then
-		rm -f "$MODPATH/dns_applied" "$MODPATH/dns_reapply"
+		rm -f "$MODPATH/dns_applied"
 		return 0
 	fi
 	command -v settings >/dev/null 2>&1 || return 0
@@ -544,7 +544,7 @@ apply_private_dns() {
 			settings delete global private_dns_specifier 2>/dev/null
 			log_print " [+] Private DNS 已恢复系统默认"
 		fi
-		rm -f "$MODPATH/dns_applied" "$MODPATH/dns_reapply"
+		rm -f "$MODPATH/dns_applied"
 		return 0
 	fi
 	hostname=$(basename "$marker")
@@ -552,6 +552,11 @@ apply_private_dns() {
 	[ -z "$hostname" ] && return 0
 	current_mode=$(settings get global private_dns_mode 2>/dev/null)
 	current_host=$(settings get global private_dns_specifier 2>/dev/null)
+	# 读不到当前值（settings 还没准备好）就跳过，别硬写
+	if [ -z "$current_mode" ]; then
+		log_print "[*] Private DNS 当前值读不到，跳过这次应用"
+		return 0
+	fi
 	if [ "$current_mode" = "hostname" ] && [ "$current_host" = "$hostname" ]; then
 		# 以前这里直接 return，日志里什么都不剩，看不出是“已经生效”
 		# 还是“标记根本不存在”。记一行，诊断时能分清。
@@ -560,13 +565,13 @@ apply_private_dns() {
 		return 0
 	fi
 	# 需要改写，但这个主机名之前是我们写上的、后来被系统/用户关掉了
-	# （比如严格模式连不上服务器，系统弹框点了关闭）：不要自动重开，
-	# 否则开机就写回去、弹框、点了关闭又写回去，无限循环。
-	# 只有去广告页点了“应用”（会写 dns_reapply）或换了新的主机名，
-	# 才重新写。
+	# （比如严格模式连不上服务器，系统弹框点了关闭）：不要写回去，
+	# 直接删掉标记，让去广告页诚实显示未启用；想再开就去页面重新选。
+	# （只在“之前写上过”时删——刚选好、还没来得及生效的，不删。）
 	applied_host=$(cat "$MODPATH/dns_applied" 2>/dev/null)
-	if [ "$applied_host" = "$hostname" ] && [ ! -f "$MODPATH/dns_reapply" ]; then
-		log_print "[*] Private DNS $hostname 已被系统/用户关闭，不再自动重开（去广告页点应用可重新开启）"
+	if [ "$applied_host" = "$hostname" ]; then
+		rm -f "$marker" "$MODPATH/dns_applied"
+		log_print "[*] Private DNS $hostname 已被系统/用户关闭，标记已删除（去广告页重新选可再开）"
 		return 0
 	fi
 	settings put global private_dns_mode hostname 2>/dev/null
@@ -578,7 +583,6 @@ apply_private_dns() {
 	if [ "$current_mode" = "hostname" ] && [ "$current_host" = "$hostname" ]; then
 		log_print " [+] Private DNS 已设为 $hostname"
 		echo "$hostname" > "$MODPATH/dns_applied" 2>/dev/null
-		rm -f "$MODPATH/dns_reapply"
 	else
 		log_print "[!] Private DNS 写入失败（当前 mode=$current_mode host=$current_host）"
 	fi
