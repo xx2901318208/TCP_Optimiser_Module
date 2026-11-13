@@ -1,7 +1,7 @@
 import { exec, toast } from './kernelsu.js';
 import router_state from './router.js';
 import { addLog } from './logs.js';
-import { fetchIsConfigFile, fetchPrivateDnsMarker } from './common.js';
+import { fetchIsConfigFile, fetchPrivateDnsMarker, get_hosts_block_state, get_private_dns_state } from './common.js';
 
 const PRIVATE_DNS_OPTIONS = [
 	{ value: "off", label: "关闭（不管理）" },
@@ -48,7 +48,12 @@ export async function initAdblock() {
 	if(router_state.adblockPageParams.adblockHosts == null)
 		router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
 
-	await populatePrivateDnsDropdown(privateDns);
+	// 实际生效状态和下拉框一起读：开关只代表“你选了什么”，这里显示
+	// 的才是手机上真正生效的——hosts 看挂载，Private DNS 看系统设置。
+	await Promise.all([
+		refreshAdblockStatus(),
+		populatePrivateDnsDropdown(privateDns),
+	]);
 	adblockHosts.checked = router_state.adblockPageParams.adblockHosts;
 
 	async function applyAdblockSettings() {
@@ -95,10 +100,42 @@ export async function initAdblock() {
 		if(res == 0)
 		{
 			const { errno: output } = await exec(`touch ${router_state.moduleInformation.moduleDir}/force_apply && chmod 644 ${router_state.moduleInformation.moduleDir}/force_apply`);
-			if(output == 0)
+			if(output == 0) {
 				toast("请等待 5 秒以生效更改！");
+				// service.sh 下一轮才真正挂载/写设置，6 秒后再读一次实际状态
+				setTimeout(refreshAdblockStatus, 6000);
+			}
 		}
 	});
 
 	router_state.isInitializing = false;
+}
+
+// 读两处实际生效状态并显示在页面顶部。hosts 只看 /proc/mounts 里的挂载，
+// Private DNS 只看系统设置——开关选了什么不算数。
+async function refreshAdblockStatus() {
+	try {
+		const [hostsState, dnsState] = await Promise.all([
+			get_hosts_block_state(),
+			get_private_dns_state(),
+		]);
+
+		const hostsEl = document.getElementById('hosts-status');
+		if (hostsEl) {
+			if (hostsState.status === 'ours') {
+				hostsEl.textContent = `已开启（${hostsState.rules} 条规则，正在生效）`;
+			} else if (hostsState.status === 'other') {
+				hostsEl.textContent = `被其他工具占用（${hostsState.source}），我们的 hosts 没挂上`;
+			} else if (hostsState.status === 'error') {
+				hostsEl.textContent = '读取失败';
+			} else {
+				hostsEl.textContent = '未开启';
+			}
+		}
+
+		const dnsEl = document.getElementById('private-dns-status');
+		if (dnsEl) dnsEl.textContent = dnsState;
+	} catch (error) {
+		console.error('Error refreshing adblock status:', error);
+	}
 }

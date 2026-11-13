@@ -5,6 +5,18 @@
 
   <div class="setting-group">
 	<div class="setting-row">
+	  <span class="status-label">hosts 实际状态</span>
+	  <span id="hosts-status" class="status-value">正在读取…</span>
+	</div>
+	<div class="setting-row">
+	  <span class="status-label">Private DNS 实际状态</span>
+	  <span id="private-dns-status" class="status-value">正在读取…</span>
+	</div>
+	<span class="setting-note">这里显示的是手机上真正生效的状态，不是你选了什么：hosts 看 /system/etc/hosts 是不是我们的挂载，Private DNS 看系统设置里的实际值。点“应用”后约 6 秒再读一次。</span>
+  </div>
+
+  <div class="setting-group">
+	<div class="setting-row">
 	  <label for="private-dns">Private DNS</label>
 	  <select id="private-dns" class="dropdown">
 		<option value="none">正在加载选项</option>

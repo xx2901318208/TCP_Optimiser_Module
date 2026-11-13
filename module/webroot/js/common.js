@@ -197,6 +197,28 @@ export async function get_private_dns_state() {
 	}
 }
 
+// hosts 去广告的实际生效状态：只看 /proc/mounts，不看开关选了什么。
+// ours = 我们的列表正挂着；other = 别的工具（AdAway 等）占着位置；
+// none = 没挂。开关开了但这里显示“未开启”，就是挂载没成功。
+export async function get_hosts_block_state() {
+	try {
+		const dir = router_state.moduleInformation.moduleDir;
+		const { stdout: mountLine } = await exec(`grep " /system/etc/hosts " /proc/mounts | head -n1`);
+		const line = mountLine.trim();
+		if (line) {
+			if (line.startsWith(`${dir}/hosts `)) {
+				const { stdout: count } = await exec(`grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null`);
+				return { status: 'ours', rules: parseInt(count.trim(), 10) || 0 };
+			}
+			return { status: 'other', source: line.split(' ')[0] };
+		}
+		return { status: 'none' };
+	} catch (error) {
+		console.error('Error fetching hosts block state:', error);
+		return { status: 'error' };
+	}
+}
+
 export async function fetchIsConfigFile (file_name, listing) {
 	// 调用方已经一次 ls 拿回目录列表时直接本地判断，不再多跑一次 shell
 	if (listing) return listing.includes(file_name);

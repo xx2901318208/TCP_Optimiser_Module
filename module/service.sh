@@ -440,11 +440,22 @@ apply_private_dns() {
 	current_mode=$(settings get global private_dns_mode 2>/dev/null)
 	current_host=$(settings get global private_dns_specifier 2>/dev/null)
 	if [ "$current_mode" = "hostname" ] && [ "$current_host" = "$hostname" ]; then
+		# 以前这里直接 return，日志里什么都不剩，看不出是“已经生效”
+		# 还是“标记根本不存在”。记一行，诊断时能分清。
+		log_print "[*] Private DNS 已是 $hostname，不用改"
 		return 0
 	fi
 	settings put global private_dns_mode hostname 2>/dev/null
 	settings put global private_dns_specifier "$hostname" 2>/dev/null
-	log_print " [+] Private DNS 已设为 $hostname"
+	# 回读验证：settings put 失败时不报错，以前这里直接记“已设为”，
+	# 写没写上根本不知道
+	current_mode=$(settings get global private_dns_mode 2>/dev/null)
+	current_host=$(settings get global private_dns_specifier 2>/dev/null)
+	if [ "$current_mode" = "hostname" ] && [ "$current_host" = "$hostname" ]; then
+		log_print " [+] Private DNS 已设为 $hostname"
+	else
+		log_print "[!] Private DNS 写入失败（当前 mode=$current_mode host=$current_host）"
+	fi
 }
 
 # hosts 去广告（标记文件 adblock_hosts，默认不开）：

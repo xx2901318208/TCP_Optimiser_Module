@@ -14,6 +14,19 @@
   flex: 1;
 }
 
+.status-label {
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.status-value {
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+  max-width: 65%;
+}
+
 #adblock-hosts-label {
   color: var(--text-secondary);
 }
