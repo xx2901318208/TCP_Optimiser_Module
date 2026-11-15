@@ -251,20 +251,32 @@ extract_qdisc_from_path() {
     esac
 }
 
-apply_wifi_settings() {
-	local iface="$1"
-	local applied=0
+apply_wifi_powersave() {
 	# Wi-Fi 省电开关（标记文件 wifi_powersave_off 存在时才关，默认不开）：
 	# 省电会让射频在空闲时休眠，游戏/语音这类断续流量每次唤醒多几十毫秒；
 	# 关掉延迟低，但费电。开关在设置页；关掉时恢复成开启。
-	if command -v iw >/dev/null 2>&1; then
-		if [ -f "$MODPATH/wifi_powersave_off" ]; then
-			iw dev "$iface" set power_save off 2>/dev/null
-			log_print " [+] Wi-Fi 省电已关闭 ($iface)，降低空闲唤醒延迟"
-		else
-			iw dev "$iface" set power_save on 2>/dev/null
-		fi
+	# 注意：低延迟模式（wifi_low_latency）本身就关省电（系统框架做的，
+	# 用的就是同一个 NL80211 省电开关），所以低延迟开着时这里不把省电
+	# 再打开——不然两个开关会互相抵消。低延迟优先。
+	local iface="$1"
+	if ! command -v iw >/dev/null 2>&1; then
+		return 0
 	fi
+	if [ -f "$MODPATH/wifi_powersave_off" ]; then
+		iw dev "$iface" set power_save off 2>/dev/null
+		log_print " [+] Wi-Fi 省电已关闭 ($iface)，降低空闲唤醒延迟"
+	elif [ -f "$MODPATH/wifi_low_latency" ]; then
+		iw dev "$iface" set power_save off 2>/dev/null
+		log_print " [+] Wi-Fi 省电已关闭 ($iface)（低延迟模式要求）"
+	else
+		iw dev "$iface" set power_save on 2>/dev/null
+	fi
+}
+
+apply_wifi_settings() {
+	local iface="$1"
+	local applied=0
+	apply_wifi_powersave "$iface"
 	# 刚切到 Wi-Fi 时 iw 可能还没读到关联信息（freq 为空），等 2 秒重试两次，
 	# 三次都空才放弃（只打一行提示，不刷“ MHz”空行）
 	freq=""

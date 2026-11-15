@@ -86,11 +86,15 @@
 	  </div>
 
 	  <div class="setting-group toggle-container">
-		<label id="wifi-powersave-off-label" for="wifi-powersave-off">关闭 Wi-Fi 省电（低延迟，费电）</label>
+		<label id="wifi-powersave-off-label" for="wifi-powersave-off">关闭 Wi-Fi 省电（Wi-Fi 不休眠，费电）</label>
 		<label class="toggle">
 		  <input type="checkbox" id="wifi-powersave-off">
 		  <span class="slider"></span>
 		</label>
+	  </div>
+
+	  <div class="setting-group">
+		<p class="help-text">打开后 Wi-Fi 芯片不休眠，数据到了马上收，不用等唤醒；延迟低一点，但费电。低延迟模式开了的话，省电本来就已经关了，两个都开也不冲突。</p>
 	  </div>
 
 	  <div class="setting-group toggle-container">
