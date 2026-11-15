@@ -102,7 +102,19 @@
 	  </div>
 
 	  <div class="setting-group">
-		<p class="help-text">打开后调系统低延迟模式（cmd wifi force-low-latency-mode），Wi-Fi 固件省电关、后台扫描减少，打游戏和实时语音延迟更低；费电略增。重启后模块开机自动按开关状态应用一次；关掉开关会主动写 disabled。</p>
+		<p class="help-text">打开后，手机 Wi-Fi 会优先保证延迟：打游戏、打语音电话时反应更快、不容易卡顿；代价是费电多一点。重启后模块会自动按这个开关的状态设置一次；关掉开关就恢复正常。</p>
+	  </div>
+
+	  <div class="setting-group toggle-container">
+		<label id="data-low-latency-label" for="data-low-latency">数据低延迟（打游戏、语音通话）</label>
+		<label class="toggle">
+		  <input type="checkbox" id="data-low-latency">
+		  <span class="slider"></span>
+		</label>
+	  </div>
+
+	  <div class="setting-group">
+		<p class="help-text">打开后，手机发数据更积极：游戏里的小操作、语音里的每一句话不用等着攒，直接发出去；好久没动静的连接回来也不用重新热身。打游戏、打语音电话时反应更快。代价是费电和流量略多一点，大文件下载可能慢一点点。关掉就恢复正常。</p>
 	  </div>
 	</div>
   </div>

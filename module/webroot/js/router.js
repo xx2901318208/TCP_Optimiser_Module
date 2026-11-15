@@ -30,6 +30,7 @@ const router_state = {
 		initrwndValue: null,
 		wifiPowersaveOff: null,
 		wifiLowLatency: null,
+		dataLowLatency: null,
 		wifi7Unlock: null,
 	},
 	adblockPageParams: {
@@ -73,6 +74,9 @@ const realtimeUpdater = async () => {
 
 			if(router_state.settingsPageParams.wifiLowLatency == null)
 				router_state.settingsPageParams.wifiLowLatency = listing.includes("wifi_low_latency");
+
+			if(router_state.settingsPageParams.dataLowLatency == null)
+				router_state.settingsPageParams.dataLowLatency = listing.includes("data_low_latency");
 
 			if(router_state.adblockPageParams.adblockHosts == null)
 				router_state.adblockPageParams.adblockHosts = listing.includes("adblock_hosts");

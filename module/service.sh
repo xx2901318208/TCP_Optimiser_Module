@@ -454,6 +454,24 @@ wifi7_has_6g_channels() {
 	iw phy 2>/dev/null | grep -q -E ' (59[3-9][0-9]|6[0-9][0-9][0-9]|7[01][0-9][0-9]) MHz'
 }
 
+apply_data_low_latency() {
+	# 数据低延迟开关（标记文件 data_low_latency）：调 TCP 的三个值，
+	# 让手机发数据更积极——小包不等攒、直接发，闲了的连接回来不
+	# 用重新加速，BBR 跟网络延迟变化更快。关掉时恢复默认值。
+	# 注意：tcp_notsent_lowat 16384 模块里早就有了（network_config.sh），
+	# 这里不重复写；tcp_low_latency 在 6.6 上已失效，不写。
+	if [ -f "$MODPATH/data_low_latency" ]; then
+		_set /proc/sys/net/ipv4/tcp_autocorking 0
+		_set /proc/sys/net/ipv4/tcp_slow_start_after_idle 0
+		_set /proc/sys/net/ipv4/tcp_min_rtt_wlen 5
+		log_print "[+] 数据低延迟已开启"
+	else
+		_set /proc/sys/net/ipv4/tcp_autocorking 1
+		_set /proc/sys/net/ipv4/tcp_slow_start_after_idle 1
+		_set /proc/sys/net/ipv4/tcp_min_rtt_wlen 10
+	fi
+}
+
 apply_wifi_low_latency() {
 	# Wi-Fi 低延迟开关（标记文件 wifi_low_latency）：调系统框架的
 	# force-low-latency-mode，到底层 HAL 让固件走低延迟模式（省电
@@ -747,6 +765,8 @@ while true; do
 			apply_wifi7_unlock
 			# Wi-Fi 低延迟同样和接口无关（有标记才开，没标记是关掉）
 			apply_wifi_low_latency
+			# 数据低延迟同样和接口无关（有标记才开，没标记是恢复默认）
+			apply_data_low_latency
 			
 			if [ -n "$WATCHDOG_PID" ]; then
 				kill "$WATCHDOG_PID" 2>/dev/null
