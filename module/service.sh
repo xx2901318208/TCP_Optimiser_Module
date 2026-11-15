@@ -454,6 +454,26 @@ wifi7_has_6g_channels() {
 	iw phy 2>/dev/null | grep -q -E ' (59[3-9][0-9]|6[0-9][0-9][0-9]|7[01][0-9][0-9]) MHz'
 }
 
+apply_wifi_low_latency() {
+	# Wi-Fi 低延迟开关（标记文件 wifi_low_latency）：调系统框架的
+	# force-low-latency-mode，到底层 HAL 让固件走低延迟模式（省电
+	# 关、后台扫描减少），打游戏/实时流量延迟更低，费电略增。
+	# 和接口无关：开机、切网、强制应用时都按标记写一次；关掉时主
+	# 动写 disabled——这个开关重启前一直有效，只停写不会自己关。
+	if ! command -v cmd >/dev/null 2>&1; then
+		return 0
+	fi
+	if [ -f "$MODPATH/wifi_low_latency" ]; then
+		if cmd wifi force-low-latency-mode enabled 2>/dev/null; then
+			log_print "[+] Wi-Fi 低延迟已开启"
+		else
+			log_print "[!] Wi-Fi 低延迟开启失败（系统不支持 force-low-latency-mode 或 Wi-Fi 未开启）"
+		fi
+	else
+		cmd wifi force-low-latency-mode disabled 2>/dev/null
+	fi
+}
+
 apply_wifi7_unlock() {
 	# 开关没开：有挂载就卸掉（关掉即还原），persist 有备份就恢复
 	if [ ! -f "$MODPATH/wifi7_unlock" ]; then
@@ -725,6 +745,8 @@ while true; do
 			apply_hosts_block
 			# Wi-Fi 7 解锁同样和接口无关（有标记才做，没标记是还原）
 			apply_wifi7_unlock
+			# Wi-Fi 低延迟同样和接口无关（有标记才开，没标记是关掉）
+			apply_wifi_low_latency
 			
 			if [ -n "$WATCHDOG_PID" ]; then
 				kill "$WATCHDOG_PID" 2>/dev/null
