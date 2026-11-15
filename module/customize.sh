@@ -186,3 +186,22 @@ MODDIR=/data/adb/modules/k-network
 cp "$MODDIR/module.prop.bak" "$MODDIR/module.prop"
 EOF
 chmod +x /data/adb/post-fs-data.d/k-network.sh
+
+# hosts 列表档位：模块更新会把自带的 hosts（StevenBlack）盖回来。
+# 如果用户之前下载过列表（update_hosts.sh 成功时会另存一份
+# hosts.saved.<档位>，不在安装包里，更新时不会被盖掉），用保存的那份
+# 恢复。KSU 更新时旧模块在 MODULE_PATH，新模块在 MODPATH，两边都找。
+TIER_RESTORE=""
+for _d in "$MODPATH" "$MODULE_PATH"; do
+    [ -f "$_d/hosts_tier" ] && TIER_RESTORE=$(cat "$_d/hosts_tier" 2>/dev/null | tr -d ' \t\r\n') && break
+done
+[ -z "$TIER_RESTORE" ] && TIER_RESTORE="stevenblack"
+SAVED_HOSTS=""
+for _d in "$MODPATH" "$MODULE_PATH"; do
+    [ -f "$_d/hosts.saved.$TIER_RESTORE" ] && SAVED_HOSTS="$_d/hosts.saved.$TIER_RESTORE" && break
+done
+if [ -n "$SAVED_HOSTS" ]; then
+    cp -f "$SAVED_HOSTS" "$MODPATH/hosts" 2>/dev/null
+    cp -f "$SAVED_HOSTS" "$MODPATH/hosts.saved.$TIER_RESTORE" 2>/dev/null
+    ui_print " [+] 已恢复下载过的 hosts 列表（$TIER_RESTORE 档）"
+fi

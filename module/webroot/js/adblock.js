@@ -11,6 +11,18 @@ const PRIVATE_DNS_OPTIONS = [
 	{ value: "dot.pub", label: "腾讯 DNSPod（国内快）" },
 ];
 
+async function fetchHostsTier() {
+	// 读 hosts_tier 文件（内容是 stevenblack 或 oisd）；没有/读不到/写错了就用标准档
+	try {
+		const dir = router_state.moduleInformation.moduleDir;
+		const { stdout } = await exec(`cat "${dir}/hosts_tier" 2>/dev/null`);
+		const tier = (stdout || '').trim();
+		return (tier === 'oisd' || tier === 'stevenblack') ? tier : 'stevenblack';
+	} catch (error) {
+		return 'stevenblack';
+	}
+}
+
 async function populatePrivateDnsDropdown(dropdown) {
 	// 同设置页：先等值回来再清选项，等待期间保留“正在加载选项”占位
 	var value = router_state.adblockPageParams.privateDns == null ? await fetchPrivateDnsMarker() : router_state.adblockPageParams.privateDns;
@@ -43,6 +55,7 @@ async function populatePrivateDnsDropdown(dropdown) {
 export async function initAdblock() {
 	const adblockHosts = document.getElementById('adblock-hosts');
 	const privateDns = document.getElementById('private-dns');
+	const hostsTier = document.getElementById('hosts-tier');
 	const applyBtn = document.getElementById('apply');
 	const updateHostsBtn = document.getElementById('update-hosts');
 	const updateHostsStatus = document.getElementById('hosts-update-status');
@@ -57,12 +70,14 @@ export async function initAdblock() {
 		refreshHostsListInfo(),
 		populatePrivateDnsDropdown(privateDns),
 	]);
+	if (hostsTier) hostsTier.value = await fetchHostsTier();
 	adblockHosts.checked = router_state.adblockPageParams.adblockHosts;
 
 	async function applyAdblockSettings() {
 		const settings = {
 			adblockHosts: adblockHosts.checked,
 			privateDns: privateDns.value,
+			hostsTier: hostsTier ? hostsTier.value : 'stevenblack',
 		};
 
 		try
@@ -98,12 +113,16 @@ export async function initAdblock() {
 			if(touches.length > 0)
 				await exec(touches.join(' ; '));
 
+			// 档位也写进 hosts_tier 文件（更新按钮和模块更新恢复都认它）；
+			// 换档位本身不下载新列表，点“更新 hosts 列表”才下载。
+			await exec(`echo "${settings.hostsTier}" > ${dir}/hosts_tier && chmod 644 ${dir}/hosts_tier`);
+
 			console.log('Applied adblock settings:', settings);
 
 			router_state.adblockPageParams.adblockHosts = settings.adblockHosts;
 			router_state.adblockPageParams.privateDns = settings.privateDns;
 			toast("设置已成功应用！");
-			addLog(`应用去广告设置: adblock_hosts=${settings.adblockHosts}, private_dns=${settings.privateDns}`);
+			addLog(`应用去广告设置: adblock_hosts=${settings.adblockHosts}, private_dns=${settings.privateDns}, hosts_tier=${settings.hostsTier}`);
 			return 0;
 		} catch (error) {
 			console.error('Error applying adblock settings:', error);
@@ -128,17 +147,19 @@ export async function initAdblock() {
 		}
 	});
 
-	// 更新 hosts 列表：手机直接从 StevenBlack 上游下载最新版，
-	// update_hosts.sh 里校验（不是 StevenBlack / 有可疑 IP / 不完整就
-	// 保留旧列表）、备份旧列表、替换、去广告开着就重新挂载。
-	// 下载要几秒，期间把按钮锁住，免得重复点。
+	// 更新 hosts 列表：手机直接从所选档位的上游下载最新版（标准档是
+	// StevenBlack，下下来就是 hosts 格式；更强档是 OISD Big，下下来是
+	// Adblock 格式，update_hosts.sh 先校验再转成 hosts 格式），
+	// 校验（不是认得的来源 / 有可疑 IP / 不完整就保留旧列表）、备份旧
+	// 列表、替换、去广告开着就重新挂载。下载要几秒，期间把按钮锁住，免得重复点。
 	if (updateHostsBtn) {
 		updateHostsBtn.addEventListener('click', async () => {
 			updateHostsBtn.disabled = true;
 			if (updateHostsStatus) updateHostsStatus.textContent = '正在从上游下载最新列表…';
 			try {
 				const dir = router_state.moduleInformation.moduleDir;
-				const { stdout } = await exec(`sh ${dir}/update_hosts.sh`);
+				const tier = (hostsTier && hostsTier.value) ? hostsTier.value : 'stevenblack';
+				const { stdout } = await exec(`sh ${dir}/update_hosts.sh ${tier}`);
 				const firstLine = (stdout || '').trim().split('\n')[0] || '';
 				if (firstLine.startsWith('OK|')) {
 					const [, date, rules] = firstLine.split('|');
@@ -199,13 +220,14 @@ async function refreshAdblockStatus() {
 }
 
 // 读模块 hosts 文件的版本（# Date: 头）和规则数，显示在页面顶部。
+// 再读 # Title: 头，区分是哪个档位的列表（StevenBlack 还是 OISD Big）。
 async function refreshHostsListInfo() {
 	try {
 		const info = await get_hosts_list_info();
 		const infoEl = document.getElementById('hosts-list-info');
 		if (!infoEl) return;
 		if (info) {
-			infoEl.textContent = `${info.date}（${info.rules} 条规则）`;
+			infoEl.textContent = info.title ? `${info.title}，${info.date}（${info.rules} 条规则）` : `${info.date}（${info.rules} 条规则）`;
 		} else {
 			infoEl.textContent = '读取失败';
 		}

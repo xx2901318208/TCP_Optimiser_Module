@@ -41,7 +41,18 @@
   </div>
 
   <div class="setting-group">
-	<span class="setting-note">hosts 去广告：把 StevenBlack 广告+恶意域名列表挂载到 /system/etc/hosts，广告域名在本地直接拦住，不会发出去。只影响之后的新查询，已经打开的应用要等 DNS 缓存过期或重启应用才生效。列表版本见上面一行。</span>
+	<span class="setting-note">hosts 去广告：把广告+恶意域名列表挂载到 /system/etc/hosts，广告域名在本地直接拦住，不会发出去。只影响之后的新查询，已经打开的应用要等 DNS 缓存过期或重启应用才生效。列表和档位见上面两行。</span>
+  </div>
+
+  <div class="setting-group">
+	<div class="setting-row">
+	  <label for="hosts-tier">hosts 列表档位</label>
+	  <select id="hosts-tier" class="dropdown">
+		<option value="stevenblack">标准（StevenBlack，误拦少）</option>
+		<option value="oisd">更强（OISD Big，拦得多）</option>
+	  </select>
+	</div>
+	<span class="setting-note">标准档是 StevenBlack（约 78000 条，误拦少）；更强档是 OISD Big（约 228000 条，拦得多，个别网站或应用可能打不开，换回标准档就行）。换档位后点下面的“更新 hosts 列表”，新列表马上生效。</span>
   </div>
 
   <div class="setting-group toggle-container">
