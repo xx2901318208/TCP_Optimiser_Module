@@ -61,3 +61,31 @@
 		<span id="kernel_version_value" class="value">正在加载...</span>
 	</div>
 </div>
+
+<div class="card signal">
+	<div class="card-header">
+	<h3>Wi-Fi 信号</h3>
+	</div>
+	<div id="signal_rssi_div" class="info-row hidden">
+		<span class="label">信号强度</span>
+		<span id="signal_rssi_value" class="value">—</span>
+	</div>
+	<div id="signal_band_div" class="info-row hidden">
+		<span class="label">频段</span>
+		<span id="signal_band_value" class="value">—</span>
+	</div>
+	<div id="signal_rate_div" class="info-row hidden">
+		<span class="label">连接速率</span>
+		<span id="signal_rate_value" class="value">—</span>
+	</div>
+	<div id="signal_latency_div" class="info-row hidden">
+		<span class="label">网关延迟</span>
+		<span id="signal_latency_value" class="value">—</span>
+	</div>
+	<div class="setting-group toggle-container">
+		<button id="refresh-signal" class="apply-btn">刷新信号</button>
+	</div>
+	<div class="setting-group">
+		<span id="signal-update-status" class="setting-note">点“刷新信号”读一次当前 Wi-Fi 信号，不自动刷。信号强度越接近 0 越好（一般 -50 左右很好，-70 左右比较差）；网关延迟是手机到路由器的往返时间，越小越快。读不到的项显示 —。</span>
+	</div>
+</div>
