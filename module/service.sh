@@ -574,6 +574,16 @@ apply_private_dns() {
 		log_print "[*] Private DNS $hostname 已被系统/用户关闭，标记已删除（去广告页重新选可再开）"
 		return 0
 	fi
+	# 连通性预检（4.19）：853 端口连不上就别写——写了也是弹失败框。
+	# 检查不到（本机没有 curl）时直接写，老逻辑（删标记）仍是兜底。
+	# 注意：标记留着，下次切网会再试（万一网络好了就能用）。
+	if [ -f "$MODPATH/check_dns.sh" ]; then
+		sh "$MODPATH/check_dns.sh" "$hostname" 2>/dev/null
+		if [ "$?" = "1" ]; then
+			log_print "[!] Private DNS $hostname 连不上（853 端口不通），已跳过；想用请换 AliDNS/DNSPod"
+			return 0
+		fi
+	fi
 	settings put global private_dns_mode hostname 2>/dev/null
 	settings put global private_dns_specifier "$hostname" 2>/dev/null
 	# 回读验证：settings put 失败时不报错，以前这里直接记“已设为”，

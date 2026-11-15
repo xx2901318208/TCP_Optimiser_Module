@@ -67,6 +67,23 @@ export async function initAdblock() {
 
 		try
 		{
+			// 连通性预检（4.19）：选了解析器先测一下 853 端口通不通，
+			// 不通就别写标记（写了也是弹失败框）。检查跑不起来（本机
+			// 没有 curl）时直接走老流程，删标记逻辑仍是兜底。
+			if (settings.privateDns && settings.privateDns !== "off" && settings.privateDns !== "default") {
+				try {
+					const dir = router_state.moduleInformation.moduleDir;
+					const { errno: checkRc } = await exec(`sh ${dir}/check_dns.sh ${settings.privateDns}`);
+					if (checkRc === 1) {
+						toast(`${settings.privateDns} 连不上（853 端口不通），没应用。`);
+						addLog(`Private DNS 预检失败: ${settings.privateDns} 连不上，没应用`);
+						return 1;
+					}
+				} catch (checkError) {
+					console.error('DNS pre-check failed to run, proceeding:', checkError);
+				}
+			}
+
 			// 和设置页一样：删旧标记、写新标记各合并成一条命令，少等几次 shell。
 			const dir = router_state.moduleInformation.moduleDir;
 			await exec(`rm -f ${dir}/adblock_hosts ${dir}/private_dns_*`);
