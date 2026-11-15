@@ -592,29 +592,64 @@ apply_private_dns() {
 # 开关打开时把模块自带的 hosts 列表（StevenBlack，广告+恶意域名）
 # bind 挂载到 /system/etc/hosts；关掉时卸载恢复原样。
 # 注意：和 Private DNS 不要同时开，两者叠加优先级不明确。
+# 判断挂载不能看 /proc/mounts：文件 bind 挂载在里面只显示块设备
+# （这台机是 /dev/block/dm-39），永远看不到模块的文件路径——
+# 2026-11-15 真机确认：挂载明明成功了却报“挂载失败”，关开关也卸不掉。
+# 所以用内容判断：/system/etc/hosts 和模块 hosts 文件一致就是我们挂上的。
+hosts_block_active() {
+	[ -f /system/etc/hosts ] || return 1
+	[ -f "$MODPATH/hosts" ] || return 1
+	# 首选整文件比对（AdAway 即使用同款列表，构建日期/条目也不同）
+	if command -v md5sum >/dev/null 2>&1; then
+		local a b
+		a=$(md5sum /system/etc/hosts 2>/dev/null | awk '{print $1}')
+		b=$(md5sum "$MODPATH/hosts" 2>/dev/null | awk '{print $1}')
+		[ -n "$a" ] && [ "$a" = "$b" ] && return 0
+		return 1
+	fi
+	# 退路：行数 + 标题一致
+	[ "$(wc -l < /system/etc/hosts 2>/dev/null)" = "$(wc -l < "$MODPATH/hosts" 2>/dev/null)" ] \
+		&& head -n 1 /system/etc/hosts 2>/dev/null | grep -q "StevenBlack"
+}
+
 apply_hosts_block() {
 	if [ -f "$MODPATH/adblock_hosts" ]; then
 		[ -f "$MODPATH/hosts" ] || return 0
 		# 已经是我们的挂载就不用重复挂
-		if grep -q "^$MODPATH/hosts /system/etc/hosts " /proc/mounts 2>/dev/null; then
+		if hosts_block_active; then
 			return 0
 		fi
 		# 别的工具已经挂了 hosts（AdAway / Systemless Hosts 等）时不抢，
-		# 免得两个 hosts 文件打架
+		# 免得两个 hosts 文件打架。注意：/proc/mounts 里只要出现
+		# /system/etc/hosts 这一行就是一次 bind 挂载（系统分区本身挂在
+		# /system，不会在这里出现）；但我们的挂载在这里也只显示块设备，
+		# 所以必须先查 hosts_block_active() 再查这一行。
 		if grep -q " /system/etc/hosts " /proc/mounts 2>/dev/null; then
 			log_print "[!] /system/etc/hosts 已被其他工具挂载，hosts 去广告未启用（请先关掉 AdAway / Systemless Hosts）"
 			return 0
 		fi
 		mount --bind "$MODPATH/hosts" /system/etc/hosts 2>/dev/null
-		if grep -q "^$MODPATH/hosts /system/etc/hosts " /proc/mounts 2>/dev/null; then
+		if hosts_block_active; then
 			log_print " [+] hosts 去广告已开启（StevenBlack，$(grep -c "^0\.0\.0\.0" "$MODPATH/hosts" 2>/dev/null) 条规则）"
 		else
 			log_print "[!] hosts 去广告挂载失败"
 		fi
 	else
-		if grep -q "^$MODPATH/hosts /system/etc/hosts " /proc/mounts 2>/dev/null; then
+		# 关开关：把我们的挂载卸掉。之前这里用 /proc/mounts 判断，永远
+		# 匹配不到，umount 走不到，关了开关广告还照拦。
+		# 诊断时手动又挂了一次可能叠了两层，最多卸 3 次直到内容不再是我们。
+		local unmounted=0 i
+		for i in 1 2 3; do
+			hosts_block_active || break
 			umount /system/etc/hosts 2>/dev/null
-			log_print " [+] hosts 去广告已关闭，恢复系统 hosts"
+			unmounted=1
+		done
+		if [ "$unmounted" = "1" ]; then
+			if hosts_block_active; then
+				log_print "[!] hosts 去广告卸载不完全，请手动执行 umount /system/etc/hosts"
+			else
+				log_print " [+] hosts 去广告已关闭，恢复系统 hosts"
+			fi
 		fi
 	fi
 }

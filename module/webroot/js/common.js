@@ -201,16 +201,29 @@ export async function get_private_dns_state() {
 // ours = 我们的列表正挂着；other = 别的工具（AdAway 等）占着位置；
 // none = 没挂。开关开了但这里显示“未开启”，就是挂载没成功。
 export async function get_hosts_block_state() {
+	// /proc/mounts 认不出文件 bind 挂载（只显示块设备 dm-39），改用内容判断：
+	// /system/etc/hosts 和模块 hosts 文件 md5 一致 = 我们的挂载在生效；
+	// 内容不是我们的、但 /proc/mounts 里有 hosts 挂载 = 被别的工具占了。
+	// 2026-11-15 真机确认：旧逻辑会把自己的挂载误报成“被其他工具占用”。
 	try {
 		const dir = router_state.moduleInformation.moduleDir;
-		const { stdout: mountLine } = await exec(`grep " /system/etc/hosts " /proc/mounts | head -n1`);
-		const line = mountLine.trim();
-		if (line) {
-			if (line.startsWith(`${dir}/hosts `)) {
-				const { stdout: count } = await exec(`grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null`);
-				return { status: 'ours', rules: parseInt(count.trim(), 10) || 0 };
-			}
-			return { status: 'other', source: line.split(' ')[0] };
+		const { stdout } = await exec(`st=none
+if command -v md5sum >/dev/null 2>&1; then
+a=$(md5sum /system/etc/hosts 2>/dev/null | awk '{print $1}'); b=$(md5sum "${dir}/hosts" 2>/dev/null | awk '{print $1}'); [ -n "$a" ] && [ "$a" = "$b" ] && st=ours
+else
+[ "$(wc -l < /system/etc/hosts 2>/dev/null)" = "$(wc -l < "${dir}/hosts" 2>/dev/null)" ] && head -n1 /system/etc/hosts 2>/dev/null | grep -q StevenBlack && st=ours
+fi
+if [ "$st" = none ]; then
+if grep -q " /system/etc/hosts " /proc/mounts 2>/dev/null; then st="other $(grep " /system/etc/hosts " /proc/mounts | head -n1 | awk '{print $1}')"; fi
+fi
+echo "$st"`);
+		const token = stdout.trim();
+		if (token === 'ours') {
+			const { stdout: count } = await exec(`grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null`);
+			return { status: 'ours', rules: parseInt(count.trim(), 10) || 0 };
+		}
+		if (token.startsWith('other ')) {
+			return { status: 'other', source: token.slice(6) };
 		}
 		return { status: 'none' };
 	} catch (error) {

@@ -111,7 +111,8 @@ export async function initAdblock() {
 	router_state.isInitializing = false;
 }
 
-// 读两处实际生效状态并显示在页面顶部。hosts 只看 /proc/mounts 里的挂载，
+// 读两处实际生效状态并显示在页面顶部。hosts 看内容（/system/etc/hosts
+// 和模块 hosts 文件 md5 一致就是挂上了，/proc/mounts 认不出文件 bind 挂载），
 // Private DNS 只看系统设置——开关选了什么不算数。
 async function refreshAdblockStatus() {
 	try {
