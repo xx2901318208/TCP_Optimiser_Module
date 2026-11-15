@@ -1,7 +1,7 @@
 id=k-network
 name=K-network
-version=4.17
-versionCode=34
+version=4.18
+versionCode=35
 author=酷安 @R1263599071
 description=网络优化 & 根据接口自动切换拥塞控制算法
 updateJson=https://raw.githubusercontent.com/xx2901318208/TCP_Optimiser_Module/main/update.json
