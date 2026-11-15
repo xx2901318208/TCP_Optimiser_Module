@@ -32,7 +32,7 @@ MODULE_PATH="/data/adb/modules/$MODULE_NAME"
 OLD_MODULE_PATH="/data/adb/modules/tcp_optimiser"
 if [ -d "$OLD_MODULE_PATH" ] && [ "$OLD_MODULE_PATH" != "$MODPATH" ] && [ "$OLD_MODULE_PATH" != "$MODULE_PATH" ]; then
     ui_print " [+] 检测到老模块 tcp_optimiser，正在迁移设置到 K-network..."
-    for f in adblock_hosts wifi7_unlock initcwnd_value initrwnd_value wifi_powersave_off wifi_low_latency data_low_latency dns_applied hosts.bak; do
+    for f in adblock_hosts wifi7_unlock initcwnd_value initrwnd_value wifi_powersave_off wifi_low_latency wifi_hi_perf data_low_latency dns_applied hosts.bak; do
         if [ -f "$OLD_MODULE_PATH/$f" ]; then
             cp -a "$OLD_MODULE_PATH/$f" "$MODPATH/" 2>/dev/null
         fi

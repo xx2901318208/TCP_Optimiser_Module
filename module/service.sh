@@ -504,6 +504,27 @@ apply_wifi_low_latency() {
 	fi
 }
 
+apply_wifi_hi_perf() {
+	# Wi-Fi 高性能开关（标记文件 wifi_hi_perf）：调系统框架的
+	# force-hi-perf-mode，让 Wi-Fi 全力跑——不休眠、尽量不丢包、
+	# 低延迟，屏幕熄了也照样生效；大文件传输用，费电很多。
+	# 和低延迟互斥（设置页里只能开一个；高性能里已经包含低延迟，
+	# 万一两个标记同时存在，框架自己处理，这里排在低延迟之后执行）。
+	# 关掉时主动写 disabled，原因同低延迟。
+	if ! command -v cmd >/dev/null 2>&1; then
+		return 0
+	fi
+	if [ -f "$MODPATH/wifi_hi_perf" ]; then
+		if cmd wifi force-hi-perf-mode enabled 2>/dev/null; then
+			log_print "[+] Wi-Fi 高性能已开启"
+		else
+			log_print "[!] Wi-Fi 高性能开启失败（系统不支持 force-hi-perf-mode 或 Wi-Fi 未开启）"
+		fi
+	else
+		cmd wifi force-hi-perf-mode disabled 2>/dev/null
+	fi
+}
+
 apply_wifi7_unlock() {
 	# 开关没开：有挂载就卸掉（关掉即还原），persist 有备份就恢复
 	if [ ! -f "$MODPATH/wifi7_unlock" ]; then
@@ -777,6 +798,8 @@ while true; do
 			apply_wifi7_unlock
 			# Wi-Fi 低延迟同样和接口无关（有标记才开，没标记是关掉）
 			apply_wifi_low_latency
+			# Wi-Fi 高性能同样和接口无关（有标记才开，没标记是关掉）
+			apply_wifi_hi_perf
 			# 数据低延迟同样和接口无关（有标记才开，没标记是恢复默认）
 			apply_data_low_latency
 			

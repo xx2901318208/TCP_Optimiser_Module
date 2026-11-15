@@ -30,6 +30,7 @@ const router_state = {
 		initrwndValue: null,
 		wifiPowersaveOff: null,
 		wifiLowLatency: null,
+		wifiHiPerf: null,
 		dataLowLatency: null,
 		wifi7Unlock: null,
 	},
@@ -74,6 +75,9 @@ const realtimeUpdater = async () => {
 
 			if(router_state.settingsPageParams.wifiLowLatency == null)
 				router_state.settingsPageParams.wifiLowLatency = listing.includes("wifi_low_latency");
+
+			if(router_state.settingsPageParams.wifiHiPerf == null)
+				router_state.settingsPageParams.wifiHiPerf = listing.includes("wifi_hi_perf");
 
 			if(router_state.settingsPageParams.dataLowLatency == null)
 				router_state.settingsPageParams.dataLowLatency = listing.includes("data_low_latency");
