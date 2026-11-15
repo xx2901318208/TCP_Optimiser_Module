@@ -1,8 +1,8 @@
-id=tcp_optimiser
-name=TCP Optimiser 
+id=k-network
+name=K-network
 version=4.17
 versionCode=34
 author=酷安 @R1263599071
-description=TCP 优化 & 根据接口自动切换拥塞控制算法
+description=网络优化 & 根据接口自动切换拥塞控制算法
 updateJson=https://raw.githubusercontent.com/xx2901318208/TCP_Optimiser_Module/main/update.json
 banner=https://raw.githubusercontent.com/xx2901318208/TCP_Optimiser_Module/main/banner.png

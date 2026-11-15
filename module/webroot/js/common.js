@@ -4,7 +4,7 @@ import { addLog } from './logs.js';
 
 async function readModuleProp () {
 	try {
-		const { stdout: details } = await exec(`cat /data/adb/modules/tcp_optimiser/module.prop`);
+		const { stdout: details } = await exec(`cat /data/adb/modules/k-network/module.prop`);
 		const lines = details.trim().split('\n').filter(line => line);
 		
 		// Convert lines to object
@@ -49,7 +49,7 @@ export async function updateModuleInformation () {
 
 export async function getModuleActiveState () {
 	try {
-		const { stdout: file_exists } = await exec(`ls "/dev/.tcp_module_log_cleared"`);
+		const { stdout: file_exists } = await exec(`ls "/dev/.knetwork_module_log_cleared"`);
 		return file_exists != "" ? true: false;
 	}catch (error) {
 		console.error('Error updating module state:', error);
@@ -229,6 +229,23 @@ echo "$st"`);
 	} catch (error) {
 		console.error('Error fetching hosts block state:', error);
 		return { status: 'error' };
+	}
+}
+
+export async function get_hosts_list_info() {
+	// 读模块 hosts 文件的版本（# Date: 头）和规则数，一次 shell 调用。
+	// Date 头形如 "14 November 2026 02:04:47 (UTC)"，只取前三个词当日期。
+	try {
+		const dir = router_state.moduleInformation.moduleDir;
+		const { stdout } = await exec(`d=$(grep -m1 '^# Date:' "${dir}/hosts" 2>/dev/null | sed 's/^# Date: *//'); c=$(grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null); echo "$d|$c"`);
+		const [dateRaw, countRaw] = stdout.trim().split('|');
+		const date = (dateRaw || '').split(' ').slice(0, 3).join(' ');
+		const rules = parseInt(countRaw, 10) || 0;
+		if (!date && !rules) return null;
+		return { date, rules };
+	} catch (error) {
+		console.error('Error fetching hosts list info:', error);
+		return null;
 	}
 }
 

@@ -231,7 +231,7 @@ export async function initSettings() {
 	// initcwnd / initrwnd 的值存在两个文件里，一次 cat 读回来；
 	// 不存在就是默认 10 / 20。
 	if(router_state.settingsPageParams.initcwndValue == null || router_state.settingsPageParams.initrwndValue == null) {
-		const dir = (router_state.moduleInformation && router_state.moduleInformation.moduleDir) || '/data/adb/modules/tcp_optimiser';
+		const dir = (router_state.moduleInformation && router_state.moduleInformation.moduleDir) || '/data/adb/modules/k-network';
 		const { stdout: cwndOut } = await exec(`cat ${dir}/initcwnd_value 2>/dev/null; echo; cat ${dir}/initrwnd_value 2>/dev/null`);
 		const lines = (cwndOut || '').split('\n');
 		router_state.settingsPageParams.initcwndValue = clampValue(lines[0], 10);

@@ -11,7 +11,7 @@ export async function addLog(message) {
 	{
 		// 模块目录一般在启动时就备好了；万一调用时还没备好，
 		// 用固定路径兜底（readModuleProp 里也是这个写死的路径）。
-		const dir = router_state.moduleInformation ? router_state.moduleInformation.moduleDir : "/data/adb/modules/tcp_optimiser";
+		const dir = router_state.moduleInformation ? router_state.moduleInformation.moduleDir : "/data/adb/modules/k-network";
 		const LOGFILE = `${dir}/service.log`;
 		const MAX_LOG_LINES = 200;
 		await exec(`echo "${formatLocalDateTime()} - ${message}" >> ${dir}/service.log`);
@@ -35,7 +35,7 @@ export async function addLog(message) {
 
 export async function read_log_file() {
 	try {
-		const dir = router_state.moduleInformation ? router_state.moduleInformation.moduleDir : "/data/adb/modules/tcp_optimiser";
+		const dir = router_state.moduleInformation ? router_state.moduleInformation.moduleDir : "/data/adb/modules/k-network";
 		const { stdout: logs } = await exec(`cat ${dir}/service.log`);
 		router_state.logsList = logs.trim().split('\n').filter(line => line.length > 0);
 	} catch (error) {

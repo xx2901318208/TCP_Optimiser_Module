@@ -1,7 +1,7 @@
 import { exec, toast } from './kernelsu.js';
 import router_state from './router.js';
 import { addLog } from './logs.js';
-import { fetchIsConfigFile, fetchPrivateDnsMarker, get_hosts_block_state, get_private_dns_state } from './common.js';
+import { fetchIsConfigFile, fetchPrivateDnsMarker, get_hosts_block_state, get_hosts_list_info, get_private_dns_state } from './common.js';
 
 const PRIVATE_DNS_OPTIONS = [
 	{ value: "off", label: "关闭（不管理）" },
@@ -44,6 +44,8 @@ export async function initAdblock() {
 	const adblockHosts = document.getElementById('adblock-hosts');
 	const privateDns = document.getElementById('private-dns');
 	const applyBtn = document.getElementById('apply');
+	const updateHostsBtn = document.getElementById('update-hosts');
+	const updateHostsStatus = document.getElementById('hosts-update-status');
 
 	if(router_state.adblockPageParams.adblockHosts == null)
 		router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
@@ -52,6 +54,7 @@ export async function initAdblock() {
 	// 的才是手机上真正生效的——hosts 看挂载，Private DNS 看系统设置。
 	await Promise.all([
 		refreshAdblockStatus(),
+		refreshHostsListInfo(),
 		populatePrivateDnsDropdown(privateDns),
 	]);
 	adblockHosts.checked = router_state.adblockPageParams.adblockHosts;
@@ -108,6 +111,43 @@ export async function initAdblock() {
 		}
 	});
 
+	// 更新 hosts 列表：手机直接从 StevenBlack 上游下载最新版，
+	// update_hosts.sh 里校验（不是 StevenBlack / 有可疑 IP / 不完整就
+	// 保留旧列表）、备份旧列表、替换、去广告开着就重新挂载。
+	// 下载要几秒，期间把按钮锁住，免得重复点。
+	if (updateHostsBtn) {
+		updateHostsBtn.addEventListener('click', async () => {
+			updateHostsBtn.disabled = true;
+			if (updateHostsStatus) updateHostsStatus.textContent = '正在从上游下载最新列表…';
+			try {
+				const dir = router_state.moduleInformation.moduleDir;
+				const { stdout } = await exec(`sh ${dir}/update_hosts.sh`);
+				const firstLine = (stdout || '').trim().split('\n')[0] || '';
+				if (firstLine.startsWith('OK|')) {
+					const [, date, rules] = firstLine.split('|');
+					if (updateHostsStatus) updateHostsStatus.textContent = `已更新到 ${date}（${rules} 条规则），旧列表已备份到 hosts.bak。`;
+					addLog(`更新 hosts 列表成功: ${date}, ${rules} 条规则`);
+					toast("hosts 列表已更新！");
+					await Promise.all([refreshHostsListInfo(), refreshAdblockStatus()]);
+				} else if (firstLine.startsWith('FAIL|')) {
+					const reason = firstLine.slice(5) || '更新失败';
+					if (updateHostsStatus) updateHostsStatus.textContent = `更新失败：${reason}（旧列表还在用）`;
+					addLog(`更新 hosts 列表失败: ${reason}`);
+					toast("更新失败，旧列表还在用。");
+				} else {
+					if (updateHostsStatus) updateHostsStatus.textContent = '更新脚本没有返回结果，请看日志。';
+					addLog('更新 hosts 列表：脚本无输出');
+				}
+			} catch (error) {
+				console.error('Error updating hosts list:', error);
+				if (updateHostsStatus) updateHostsStatus.textContent = '更新出错，请看日志。';
+				toast("更新出错。");
+			} finally {
+				updateHostsBtn.disabled = false;
+			}
+		});
+	}
+
 	router_state.isInitializing = false;
 }
 
@@ -138,5 +178,21 @@ async function refreshAdblockStatus() {
 		if (dnsEl) dnsEl.textContent = dnsState;
 	} catch (error) {
 		console.error('Error refreshing adblock status:', error);
+	}
+}
+
+// 读模块 hosts 文件的版本（# Date: 头）和规则数，显示在页面顶部。
+async function refreshHostsListInfo() {
+	try {
+		const info = await get_hosts_list_info();
+		const infoEl = document.getElementById('hosts-list-info');
+		if (!infoEl) return;
+		if (info) {
+			infoEl.textContent = `${info.date}（${info.rules} 条规则）`;
+		} else {
+			infoEl.textContent = '读取失败';
+		}
+	} catch (error) {
+		console.error('Error refreshing hosts list info:', error);
 	}
 }

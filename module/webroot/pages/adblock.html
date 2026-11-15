@@ -9,6 +9,10 @@
 	  <span id="hosts-status" class="status-value">正在读取…</span>
 	</div>
 	<div class="setting-row">
+	  <span class="status-label">hosts 列表版本</span>
+	  <span id="hosts-list-info" class="status-value">正在读取…</span>
+	</div>
+	<div class="setting-row">
 	  <span class="status-label">Private DNS 实际状态</span>
 	  <span id="private-dns-status" class="status-value">正在读取…</span>
 	</div>
@@ -37,7 +41,14 @@
   </div>
 
   <div class="setting-group">
-	<span class="setting-note">hosts 去广告：把 StevenBlack 广告+恶意域名列表（2026-11-08 版，78215 条规则）挂载到 /system/etc/hosts，广告域名在本地直接拦住，不会发出去。只影响之后的新查询，已经打开的应用要等 DNS 缓存过期或重启应用才生效。</span>
+	<span class="setting-note">hosts 去广告：把 StevenBlack 广告+恶意域名列表挂载到 /system/etc/hosts，广告域名在本地直接拦住，不会发出去。只影响之后的新查询，已经打开的应用要等 DNS 缓存过期或重启应用才生效。列表版本见上面一行。</span>
+  </div>
+
+  <div class="setting-group toggle-container">
+	<button id="update-hosts" class="apply-btn">更新 hosts 列表</button>
+  </div>
+  <div class="setting-group">
+	<span id="hosts-update-status" class="setting-note"></span>
   </div>
 
 	<div class="setting-group toggle-container">

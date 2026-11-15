@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# TCP Optimiser Module - 网络配置文件
+# K-network - 网络配置文件
 # 集中管理所有 sysctl 参数，避免重复代码
 #
 # 实测基准（2026-11-13，Olivia 真机）：

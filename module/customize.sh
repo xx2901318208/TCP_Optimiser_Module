@@ -24,6 +24,28 @@ fi
 MODULE_NAME=$(basename "$MODPATH")
 MODULE_PATH="/data/adb/modules/$MODULE_NAME"
 
+# 4.18 改名：模块 id 从 tcp_optimiser 改成 k-network。
+# 老模块还在的话，把它的开关/设置文件搬过来，再删掉老模块目录和老
+# post-fs-data 脚本（不删会留两个模块同时跑）。老模块的 service 循环
+# 在重启前还活着，但它的文件已经没了，读不到标记就什么都不干；重启
+# 后只剩 K-network。
+OLD_MODULE_PATH="/data/adb/modules/tcp_optimiser"
+if [ -d "$OLD_MODULE_PATH" ] && [ "$OLD_MODULE_PATH" != "$MODPATH" ] && [ "$OLD_MODULE_PATH" != "$MODULE_PATH" ]; then
+    ui_print " [+] 检测到老模块 tcp_optimiser，正在迁移设置到 K-network..."
+    for f in adblock_hosts wifi7_unlock initcwnd_value initrwnd_value wifi_powersave_off dns_applied hosts.bak; do
+        if [ -f "$OLD_MODULE_PATH/$f" ]; then
+            cp -a "$OLD_MODULE_PATH/$f" "$MODPATH/" 2>/dev/null
+        fi
+    done
+    # private_dns_* 可能有多个（不同解析器），单独按老目录展开
+    for f in "$OLD_MODULE_PATH"/private_dns_*; do
+        [ -f "$f" ] && cp -a "$f" "$MODPATH/" 2>/dev/null
+    done
+    rm -rf "$OLD_MODULE_PATH" 2>/dev/null
+    rm -f /data/adb/post-fs-data.d/tcp_optimiser.sh 2>/dev/null
+    ui_print " [+] 迁移完成，老模块已删除，重启后只剩 K-network"
+fi
+
 # Check both live and update folders
 check_exists_anywhere() {
     local prefix="$1"
@@ -158,9 +180,9 @@ cp "$MODPATH/module.prop" "$MODPATH/module.prop.bak"
 chmod +x "$MODPATH/bin/tc"
 
 mkdir -p /data/adb/post-fs-data.d
-cat << 'EOF' > /data/adb/post-fs-data.d/tcp_optimiser.sh
+cat << 'EOF' > /data/adb/post-fs-data.d/k-network.sh
 #!/system/bin/sh
-MODDIR=/data/adb/modules/tcp_optimiser
+MODDIR=/data/adb/modules/k-network
 cp "$MODDIR/module.prop.bak" "$MODDIR/module.prop"
 EOF
-chmod +x /data/adb/post-fs-data.d/tcp_optimiser.sh
+chmod +x /data/adb/post-fs-data.d/k-network.sh

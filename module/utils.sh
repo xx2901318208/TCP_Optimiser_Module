@@ -2,7 +2,7 @@
 
 MODPATH="${0%/*}"
 LOGFILE="$MODPATH/service.log"
-FLAGFILE="/dev/.tcp_module_log_cleared"
+FLAGFILE="/dev/.knetwork_module_log_cleared"
 MAX_LOG_LINES=200
 DUMPSYS_TMP_FILE="$MODPATH/dumpsys.tmp"
 
