@@ -109,20 +109,3 @@ input:checked + .slider:before {
   opacity: 0.4;
   cursor: default;
 }
-
-/* 网关延迟卡：曲线画布占满卡片宽度，开始/停止两个按钮并排各占一半 */
-#latency-chart {
-  width: 100%;
-  display: block;
-  margin: 8px 0;
-}
-
-.latency-buttons {
-  display: flex;
-  gap: 12px;
-}
-
-.latency-buttons .apply-btn {
-  flex: 1;
-  width: auto;
-}

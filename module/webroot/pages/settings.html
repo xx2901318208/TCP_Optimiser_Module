@@ -70,7 +70,7 @@
 		  <label for="initrwnd-value">initrwnd（初始接收窗口）</label>
 		  <input type="number" id="initrwnd-value" class="number-input" min="1" max="100" value="20">
 		</div>
-		<p class="help-text">initcwnd 是 TCP 连接一开始不用等确认就能发多少个包，initrwnd 是对方一开始能发多少个包。值越大，新连接起步越快（打开网页、加载图片少等几轮），但突发流量也越大，弱网或拥堵时更容易丢包重传。默认 10 / 20 是兼顾速度和稳定的值；Wi-Fi 好时可适当调大，蜂窝弱信号时建议调小。只在上面开关打开时生效。</p>
+		<p class="help-text">initcwnd 是 TCP 连接一开始不用等确认就能发多少个包，initrwnd 是对方一开始能发多少个包。值越大，新连接起步越快（打开网页、加载图片少等几轮），但突发流量也越大，弱网或拥堵时更容易丢包重传。两个值都能填 1 到 100，默认 10 / 20 是兼顾速度和稳定的值，一般不用动；Wi-Fi 信号好可以试试 20 / 40，手机信号差的时候改小一点，比如 5 / 10；别填到 100，弱网反而丢包更厉害。只在上面开关打开时生效。</p>
 	  </div>
 
 	  <div class="setting-group toggle-container">
