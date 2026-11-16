@@ -1,40 +1,30 @@
-## v4.5（2026-11-13，真机 6.6.118 / Android 17 核对后）
-1. 删掉不存在的 sysctl：`tcp_priority`、`tcp_mptcp`、`tcp_mem_pressure`、`tcp_congestion_control_algo`、`tcp_thin_dupack`，以及不存在的 `net/ipv6/tcp_rmem`、`tcp_wmem`；删掉已被 RACK 接管的遗留项 `tcp_fack`、`tcp_early_retrans`。
-2. PLB 参数名按 6.6 内核改对：`tcp_plb_idle_retransmit_rounds` / `tcp_plb_retransmit_threshold` → `tcp_plb_idle_rehash_rounds` / `tcp_plb_rehash_rounds`。
-3. MPTCP 明确不启用：这台内核无 CONFIG_MPTCP，且有 CVE-2026-98432 前科。
-4. `update.json` 修正：之前仍指向上游 fatalcoder524 的 v2.5/17，现改为本仓库 v4.5/22。
-5. `system.prop` 不再硬写 `bbr`（与 post-fs-data 的 bbr3 检测打架），只留 `default_qdisc=fq_codel`；算法只由 post-fs-data 定一次。
-6. 网络质量检测改为只读：不再按 ping 改 `tcp_fastopen`/`tcp_autocorking`，不再把 `tcp_rmem` 写成单值。
-7. `tun*` 不再误判为 Wi-Fi：VPN 接口单独归类，保留当前设置不重配。
-8. `tcp_rto_max` 全模块统一为 10000ms，不再按 Wi-Fi/蜂窝各写各的（8000/15000）。
-9. 所有 sysctl 写入先判文件存在；启动时回读拥塞算法、默认 qdisc、PLB、rto_max 写进日志，失败不再静默。
+# K-network 功能介绍（当前版本 v4.35）
 
-1. 修复 multiq total_bands 检测问题。
-2. 更新 service.sh 时序以防止某些竞争条件。[OnePlus 设备]
-3. 如果 post-fs-data.d 目录不存在则创建。
-4. 添加本地 tc 二进制文件支持，支持所有 qdisc。
-5. 修复以下情况下的 qdisc 重置问题：
-   - 切换飞行模式。
-   - 切换 Wi-Fi / 蜂窝数据。
-6. 添加 qdisc 监视器以防止 netd 更改 qdisc。
-7. 简化 htb 的 fq_codel 叶子队列。
-8. 在 post-fs 阶段添加 bbr3 检测。
-9. 启用全屏模式以防止导航栏干扰。
-10. 添加 pfifo_head_drop、pie、fq_pie 和 cake 的完整支持。
-11. 优化 sysctl 参数以实现低延迟、高吞吐量和稳定性。
-12. 添加新引入的 PLB sysctl 参数支持以进行优化。
-13. 根据 RFC 6928 将 initrwnd 最大值减少到 20。
-14. 动态设置 tcp_mem。
-15. **新增**：网络质量检测 - 自动检测网络延迟和抖动，根据网络状况优化参数。
-16. **新增**：Android 17+ 支持 - 支持新内核特性（如 MPTCP、TCP 优先级等）。
-17. **新增**：智能参数调整 - 根据 Wi-Fi 频段自动调整 TCP pacing 参数。
-18. **新增**：系统信息记录 - 启动时记录系统信息，便于调试。
-19. **优化**：代码重构 - 集中管理网络配置，减少代码重复约 60 行。
-20. **优化**：WebUI - 添加网络质量显示、Android 版本和内核版本信息。
-21. **优化**：错误处理 - 增强调试信息和日志记录。
+## 网络加速
 
-注意：
-1. 当我从更多用户获取更多信息后，将在下一版本中添加更多 qdisc 调优。
-2. qdisc 微调目前不支持自定义模式。未来可能会添加。
-3. 如果你的内核支持 bbr3，请使用 fq / cake / fq_pie 以获得最佳效果。
-4. 某些内核将 bbrv1 转换为 bbrv3 并保持名称为 bbr。即使在这种情况下，也请使用 fq / cake / fq_pie 而不是其他 qdisc。
+- Wi-Fi 和蜂窝自动换拥塞算法：连 Wi-Fi 和用流量时各用各的设置，Wi-Fi 还按 2.4G / 5G / 6G 频段调速度。
+- 新连接起步快慢可调：默认 10 / 20，能填 1 到 100；一般不用动，Wi-Fi 好可以试试 20 / 40，信号差改小一点，比如 5 / 10。
+- 切网时可以断开所有连接重连（可选，默认不开）。
+
+## Wi-Fi（WiFi 页）
+
+- 解锁 Wi-Fi 6GHz / Wi-Fi 7（高通机型，默认关；国内 6GHz 未开放，慎用）。
+- 关闭 Wi-Fi 省电：Wi-Fi 不休眠，数据到了马上收，延迟低一点，但费电。
+- Wi-Fi 低延迟：打游戏、打语音电话反应更快、不容易卡顿，费电略增。
+- Wi-Fi 高性能：传大文件更快、丢包少，屏幕熄了也生效，费电很多；里面已经包含低延迟，两个只能开一个。
+
+## 数据低延迟（设置页）
+
+- 打游戏、语音通话时反应更快；代价是费电和流量略多一点。
+
+## 去广告（去广告页）
+
+- hosts 去广告：自带一份针对国内应用的列表（17187 条），可以一键更新到最新版。
+- Private DNS 一键切换：AdGuard / 阿里 / 腾讯，写之前先测通不通，连不上的不会硬写；也可以恢复系统默认或关闭。
+- 123云盘去广告：把 123云盘里各家广告的组件停掉（默认关）。
+- 广告奖励放行：打开后，看广告领奖励、小程序奖励不会断（默认关；不是跳过广告白拿奖励，得把广告看完才能拿）。
+
+## 其他
+
+- 首页能看到网络质量（延迟、抖动）、Android 版本和内核版本。
+- 拥塞算法和队列规则可以在设置页自己选。
