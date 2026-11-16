@@ -1,28 +1,38 @@
-<div class="card signal">
+<div class="card latency">
 	<div class="card-header">
-	<h3>Wi-Fi 信号</h3>
+	<h3>网关延迟</h3>
 	</div>
-	<div id="signal_rssi_div" class="info-row hidden">
-		<span class="label">信号强度</span>
-		<span id="signal_rssi_value" class="value">—</span>
+	<div class="info-row">
+		<span class="label">路由器</span>
+		<span id="latency-gateway-value" class="value">—</span>
 	</div>
-	<div id="signal_band_div" class="info-row hidden">
-		<span class="label">频段</span>
-		<span id="signal_band_value" class="value">—</span>
+	<div class="info-row">
+		<span class="label">当前延迟</span>
+		<span id="latency-current-value" class="value">—</span>
 	</div>
-	<div id="signal_rate_div" class="info-row hidden">
-		<span class="label">连接速率</span>
-		<span id="signal_rate_value" class="value">—</span>
+	<canvas id="latency-chart" width="600" height="160"></canvas>
+	<div class="info-row">
+		<span class="label">最小</span>
+		<span id="latency-min-value" class="value">—</span>
 	</div>
-	<div id="signal_latency_div" class="info-row hidden">
-		<span class="label">网关延迟</span>
-		<span id="signal_latency_value" class="value">—</span>
+	<div class="info-row">
+		<span class="label">平均</span>
+		<span id="latency-avg-value" class="value">—</span>
 	</div>
-	<div class="setting-group toggle-container">
-		<button id="refresh-signal" class="apply-btn">刷新信号</button>
+	<div class="info-row">
+		<span class="label">最大</span>
+		<span id="latency-max-value" class="value">—</span>
+	</div>
+	<div class="info-row">
+		<span class="label">丢包率</span>
+		<span id="latency-loss-value" class="value">—</span>
+	</div>
+	<div class="setting-group latency-buttons">
+		<button id="latency-start" class="apply-btn">开始测试</button>
+		<button id="latency-stop" class="apply-btn" disabled>停止</button>
 	</div>
 	<div class="setting-group">
-		<span id="signal-update-status" class="setting-note">点“刷新信号”读一次当前 Wi-Fi 信号，不自动刷。信号强度越接近 0 越好（一般 -50 左右很好，-70 左右比较差）；网关延迟是手机到路由器的往返时间，越小越快。读不到的项显示 —。</span>
+		<span id="latency-status" class="setting-note">点“开始测试”，每秒 ping 一次路由器，连续测 60 秒，画出延迟曲线。延迟越小越快，一般几毫秒很好，几十毫秒也还行；丢包多说明 Wi-Fi 不稳。测的时候别离开这一页。</span>
 	</div>
 </div>
 
