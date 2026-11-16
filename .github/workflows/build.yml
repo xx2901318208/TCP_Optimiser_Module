@@ -55,7 +55,7 @@ jobs:
           
           # Update the updateJson URL inside module.prop
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          sed -i "s|^updateJson=.*|updateJson=https://raw.githubusercontent.com/${{ github.repository }}/${BRANCH_NAME}/update.json|g" module.prop
+          sed -i "s|^updateJson=.*|updateJson=https://cdn.jsdelivr.net/gh/${{ github.repository }}@${BRANCH_NAME}/update.json|g" module.prop
           sed -i "s|^banner=.*|banner=https://raw.githubusercontent.com/${{ github.repository }}/${BRANCH_NAME}/banner.png|g" module.prop
           
           cat module.prop
