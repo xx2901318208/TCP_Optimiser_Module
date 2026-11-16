@@ -2,6 +2,7 @@ import { updateModuleInformation, fetchIsConfigFile, fetchPrivateDnsMarker, fetc
 import { updateModuleStatus, initHome, updateHomeUI } from './home.js';
 import { initLogs } from './logs.js';
 import { initSettings } from './settings.js';
+import { initWifi } from './wifi.js';
 import { initAdblock } from './adblock.js';
 import { addLog, read_log_file, updateLogsUI } from './logs.js';
 import { fullScreen } from './kernelsu.js';
@@ -28,10 +29,12 @@ const router_state = {
 		initcwndInitrwnd: null,
 		initcwndValue: null,
 		initrwndValue: null,
+		dataLowLatency: null,
+	},
+	wifiPageParams: {
 		wifiPowersaveOff: null,
 		wifiLowLatency: null,
 		wifiHiPerf: null,
-		dataLowLatency: null,
 		wifi7Unlock: null,
 	},
 	adblockPageParams: {
@@ -69,15 +72,6 @@ const realtimeUpdater = async () => {
 
 			if(router_state.settingsPageParams.initcwndInitrwnd == null)
 				router_state.settingsPageParams.initcwndInitrwnd = listing.includes("initcwnd_initrwnd");
-
-			if(router_state.settingsPageParams.wifiPowersaveOff == null)
-				router_state.settingsPageParams.wifiPowersaveOff = listing.includes("wifi_powersave_off");
-
-			if(router_state.settingsPageParams.wifiLowLatency == null)
-				router_state.settingsPageParams.wifiLowLatency = listing.includes("wifi_low_latency");
-
-			if(router_state.settingsPageParams.wifiHiPerf == null)
-				router_state.settingsPageParams.wifiHiPerf = listing.includes("wifi_hi_perf");
 
 			if(router_state.settingsPageParams.dataLowLatency == null)
 				router_state.settingsPageParams.dataLowLatency = listing.includes("data_low_latency");
@@ -185,6 +179,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 						switch (pageName) {
 							case 'home':
 								module.initHome();
+								break;
+							case 'wifi':
+								module.initWifi();
 								break;
 							case 'settings':
 								module.initSettings();

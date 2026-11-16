@@ -140,49 +140,6 @@ export async function initHome() {
 	updateHomeUI();
 	// 加载网络质量信息
 	loadNetworkQualityInfo();
-	// 信号只手动刷：dumpsys 读一次要一两秒，自动刷会拖慢首页还占 exec 通道
-	const refreshSignalBtn = document.getElementById('refresh-signal');
-	if (refreshSignalBtn) {
-		refreshSignalBtn.addEventListener('click', refreshSignal);
-	}
-}
-
-function setSignalRow(divId, valueId, text) {
-	const div = document.getElementById(divId);
-	const span = document.getElementById(valueId);
-	if (!div || !span) return;
-	span.textContent = text;
-	div.classList.remove('hidden');
-}
-
-async function refreshSignal() {
-	const btn = document.getElementById('refresh-signal');
-	const statusEl = document.getElementById('signal-update-status');
-	if (btn) btn.disabled = true;
-	if (statusEl) statusEl.textContent = '正在读取信号…';
-	try {
-		const dir = (router_state.moduleInformation && router_state.moduleInformation.moduleDir) || '/data/adb/modules/k-network';
-		const { stdout } = await exec(`sh ${dir}/get_wifi_signal.sh`);
-		const firstLine = (stdout || '').trim().split('\n')[0] || '';
-		if (firstLine.startsWith('OK|')) {
-			const [, rssi, band, rate, latency] = firstLine.split('|');
-			setSignalRow('signal_rssi_div', 'signal_rssi_value', rssi ? `${rssi} dBm` : '—');
-			setSignalRow('signal_band_div', 'signal_band_value', band || '—');
-			setSignalRow('signal_rate_div', 'signal_rate_value', rate || '—');
-			setSignalRow('signal_latency_div', 'signal_latency_value', latency ? `${latency} ms` : '—');
-			if (statusEl) statusEl.textContent = '已刷新。';
-		} else if (firstLine.startsWith('FAIL|')) {
-			const reason = firstLine.slice(5) || '读取失败';
-			if (statusEl) statusEl.textContent = `读取失败：${reason}`;
-		} else {
-			if (statusEl) statusEl.textContent = '读取脚本没有返回结果。';
-		}
-	} catch (error) {
-		console.error('Error refreshing signal:', error);
-		if (statusEl) statusEl.textContent = '读取出错。';
-	} finally {
-		if (btn) btn.disabled = false;
-	}
 }
 
 async function loadNetworkQualityInfo() {

@@ -74,54 +74,6 @@
 	  </div>
 
 	  <div class="setting-group toggle-container">
-		<label id="wifi7-unlock-label" for="wifi7-unlock">解锁 Wi-Fi 6GHz / Wi-Fi 7</label>
-		<label class="toggle">
-		  <input type="checkbox" id="wifi7-unlock">
-		  <span class="slider"></span>
-		</label>
-	  </div>
-
-	  <div class="setting-group">
-		<p class="help-text">解锁后手机能用 6GHz 频段和 Wi-Fi 7（需路由器支持）。改高通驱动配置并强制 AU 国家码（国内 6GHz 未开放，慎用）。KernelSU 下重启两次才生效；开启后若仍未见 6GHz，开关一次 Wi-Fi 或再重启一次。关掉开关会卸除挂载并从备份恢复 persist 配置。</p>
-	  </div>
-
-	  <div class="setting-group toggle-container">
-		<label id="wifi-powersave-off-label" for="wifi-powersave-off">关闭 Wi-Fi 省电（Wi-Fi 不休眠，费电）</label>
-		<label class="toggle">
-		  <input type="checkbox" id="wifi-powersave-off">
-		  <span class="slider"></span>
-		</label>
-	  </div>
-
-	  <div class="setting-group">
-		<p class="help-text">打开后 Wi-Fi 芯片不休眠，数据到了马上收，不用等唤醒；延迟低一点，但费电。低延迟模式开了的话，省电本来就已经关了，两个都开也不冲突。</p>
-	  </div>
-
-	  <div class="setting-group toggle-container">
-		<label id="wifi-low-latency-label" for="wifi-low-latency">Wi-Fi 低延迟模式（打游戏，费电略增）</label>
-		<label class="toggle">
-		  <input type="checkbox" id="wifi-low-latency">
-		  <span class="slider"></span>
-		</label>
-	  </div>
-
-	  <div class="setting-group">
-		<p class="help-text">打开后，手机 Wi-Fi 会优先保证延迟：打游戏、打语音电话时反应更快、不容易卡顿；代价是费电多一点。高性能里已经包含低延迟，两个只能开一个；低延迟比高性能省电一些，平时打游戏用低延迟就够了，传大文件再开高性能。重启后模块会自动按这个开关的状态设置一次；关掉开关就恢复正常。</p>
-	  </div>
-
-	  <div class="setting-group toggle-container">
-		<label id="wifi-hi-perf-label" for="wifi-hi-perf">Wi-Fi 高性能（传大文件，费电很多）</label>
-		<label class="toggle">
-		  <input type="checkbox" id="wifi-hi-perf">
-		  <span class="slider"></span>
-		</label>
-	  </div>
-
-	  <div class="setting-group">
-		<p class="help-text">打开后 Wi-Fi 全力跑，大文件传得快、丢包少，屏幕熄了也照样生效；但费电很多，比低延迟更费电。高性能里已经包含低延迟，所以和低延迟只能开一个：开了高性能，低延迟会自动关掉。平时打游戏用低延迟就够了，传大文件再开高性能。</p>
-	  </div>
-
-	  <div class="setting-group toggle-container">
 		<label id="data-low-latency-label" for="data-low-latency">数据低延迟（打游戏、语音通话）</label>
 		<label class="toggle">
 		  <input type="checkbox" id="data-low-latency">

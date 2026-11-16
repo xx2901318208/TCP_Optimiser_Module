@@ -197,11 +197,7 @@ export async function initSettings() {
 	const initcwndInitrwnd = document.getElementById('initcwnd-initrwnd');
 	const initcwndValue = document.getElementById('initcwnd-value');
 	const initrwndValue = document.getElementById('initrwnd-value');
-	const wifiPowersaveOff = document.getElementById('wifi-powersave-off');
-	const wifiLowLatency = document.getElementById('wifi-low-latency');
-	const wifiHiPerf = document.getElementById('wifi-hi-perf');
 	const dataLowLatency = document.getElementById('data-low-latency');
-	const wifi7Unlock = document.getElementById('wifi7-unlock');
 	const applyBtn = document.getElementById('apply');
 	const forceApplyBtn = document.getElementById('force-apply');
 
@@ -225,20 +221,8 @@ export async function initSettings() {
 	if(router_state.settingsPageParams.initcwndInitrwnd == null)
 		router_state.settingsPageParams.initcwndInitrwnd = listing.includes("initcwnd_initrwnd");
 
-	if(router_state.settingsPageParams.wifiPowersaveOff == null)
-		router_state.settingsPageParams.wifiPowersaveOff = listing.includes("wifi_powersave_off");
-
-	if(router_state.settingsPageParams.wifiLowLatency == null)
-		router_state.settingsPageParams.wifiLowLatency = listing.includes("wifi_low_latency");
-
-	if(router_state.settingsPageParams.wifiHiPerf == null)
-		router_state.settingsPageParams.wifiHiPerf = listing.includes("wifi_hi_perf");
-
 	if(router_state.settingsPageParams.dataLowLatency == null)
 		router_state.settingsPageParams.dataLowLatency = listing.includes("data_low_latency");
-
-	if(router_state.settingsPageParams.wifi7Unlock == null)
-		router_state.settingsPageParams.wifi7Unlock = listing.includes("wifi7_unlock");
 
 	// initcwnd / initrwnd 的值存在两个文件里，一次 cat 读回来；
 	// 不存在就是默认 10 / 20。
@@ -258,18 +242,9 @@ export async function initSettings() {
 	]);
 	killConnections.checked =  router_state.settingsPageParams.killConnections;
 	initcwndInitrwnd.checked = router_state.settingsPageParams.initcwndInitrwnd;
-	wifiPowersaveOff.checked = router_state.settingsPageParams.wifiPowersaveOff;
-	wifiLowLatency.checked = router_state.settingsPageParams.wifiLowLatency;
-	wifiHiPerf.checked = router_state.settingsPageParams.wifiHiPerf;
 	dataLowLatency.checked = router_state.settingsPageParams.dataLowLatency;
 	initcwndValue.value = router_state.settingsPageParams.initcwndValue;
 	initrwndValue.value = router_state.settingsPageParams.initrwndValue;
-	wifi7Unlock.checked = router_state.settingsPageParams.wifi7Unlock;
-
-	// 高性能和低延迟只能开一个（原项目 UI 也是互斥的；高性能里已经包含低延迟）
-	wifiHiPerf.addEventListener('change', () => { if(wifiHiPerf.checked) wifiLowLatency.checked = false; });
-	wifiLowLatency.addEventListener('change', () => { if(wifiLowLatency.checked) wifiHiPerf.checked = false; });
-	if(wifiHiPerf.checked) wifiLowLatency.checked = false;
 
 	// 数字框只在 initcwnd 开关打开时能填
 	const syncInitcwndInputs = () => { initcwndValue.disabled = !initcwndInitrwnd.checked; initrwndValue.disabled = !initcwndInitrwnd.checked; };
@@ -286,11 +261,7 @@ export async function initSettings() {
 			setInitcwndInitrwndOnChange: initcwndInitrwnd.checked,
 			initcwndValue: clampValue(initcwndValue.value, 10),
 			initrwndValue: clampValue(initrwndValue.value, 20),
-			wifiPowersaveOff: wifiPowersaveOff.checked,
-			wifiLowLatency: wifiLowLatency.checked,
-			wifiHiPerf: wifiHiPerf.checked,
 			dataLowLatency: dataLowLatency.checked,
-			wifi7Unlock: wifi7Unlock.checked,
 		};
 		
 		try
@@ -298,7 +269,7 @@ export async function initSettings() {
 			// 原先这里十几个 shell 命令一个接一个等，点应用也要卡几秒。
 			// 合并成两条命令：一条删旧标记，一条写新标记。
 			const dir = router_state.moduleInformation.moduleDir;
-			await exec(`rm -f ${dir}/wlan_* ${dir}/rmnet_data_* ${dir}/kill_connections ${dir}/initcwnd_initrwnd ${dir}/initcwnd_value ${dir}/initrwnd_value ${dir}/wifi_powersave_off ${dir}/wifi_low_latency ${dir}/wifi_hi_perf ${dir}/data_low_latency ${dir}/wifi7_unlock`);
+			await exec(`rm -f ${dir}/wlan_* ${dir}/rmnet_data_* ${dir}/kill_connections ${dir}/initcwnd_initrwnd ${dir}/initcwnd_value ${dir}/initrwnd_value ${dir}/data_low_latency`);
 
 			const touches = [];
 			touches.push(`touch ${dir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc} && chmod 644 ${dir}/wlan_${settings.wifiAlgorithm}_${settings.wifiQdisc}`);
@@ -312,33 +283,8 @@ export async function initSettings() {
 				touches.push(`echo ${settings.initrwndValue} > ${dir}/initrwnd_value && chmod 644 ${dir}/initrwnd_value`);
 			}
 
-			if(settings.wifiPowersaveOff)
-				touches.push(`touch ${dir}/wifi_powersave_off && chmod 644 ${dir}/wifi_powersave_off`);
-
-			if(settings.wifiLowLatency)
-				touches.push(`touch ${dir}/wifi_low_latency && chmod 644 ${dir}/wifi_low_latency`);
-
-			if(settings.wifiHiPerf)
-				touches.push(`touch ${dir}/wifi_hi_perf && chmod 644 ${dir}/wifi_hi_perf`);
-
 			if(settings.dataLowLatency)
 				touches.push(`touch ${dir}/data_low_latency && chmod 644 ${dir}/data_low_latency`);
-
-			if(settings.wifi7Unlock)
-				touches.push(`touch ${dir}/wifi7_unlock && chmod 644 ${dir}/wifi7_unlock`);
-
-			// wifi7 开关变了就顺手 force_apply，让 service.sh 5 秒内就处理
-			// （挂载/卸除），不用等下次切网
-			if(settings.wifi7Unlock !== router_state.settingsPageParams.wifi7Unlock)
-				touches.push(`touch ${dir}/force_apply && chmod 644 ${dir}/force_apply`);
-
-			// 低延迟开关变了同样 force_apply，5 秒内就写进系统
-			if(settings.wifiLowLatency !== router_state.settingsPageParams.wifiLowLatency)
-				touches.push(`touch ${dir}/force_apply && chmod 644 ${dir}/force_apply`);
-
-			// 高性能开关变了同样 force_apply，5 秒内就写进系统
-			if(settings.wifiHiPerf !== router_state.settingsPageParams.wifiHiPerf)
-				touches.push(`touch ${dir}/force_apply && chmod 644 ${dir}/force_apply`);
 
 			// 数据低延迟开关变了同样 force_apply，5 秒内就写进系统
 			if(settings.dataLowLatency !== router_state.settingsPageParams.dataLowLatency)
@@ -357,13 +303,9 @@ export async function initSettings() {
 		router_state.settingsPageParams.initcwndInitrwnd = settings.setInitcwndInitrwndOnChange;
 		router_state.settingsPageParams.initcwndValue = settings.initcwndValue;
 		router_state.settingsPageParams.initrwndValue = settings.initrwndValue;
-		router_state.settingsPageParams.wifiPowersaveOff = settings.wifiPowersaveOff;
-		router_state.settingsPageParams.wifiLowLatency = settings.wifiLowLatency;
-		router_state.settingsPageParams.wifiHiPerf = settings.wifiHiPerf;
 		router_state.settingsPageParams.dataLowLatency = settings.dataLowLatency;
-		router_state.settingsPageParams.wifi7Unlock = settings.wifi7Unlock;
 		toast("设置已成功应用！");
-		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange} (initcwnd=${settings.initcwndValue}, initrwnd=${settings.initrwndValue}), wifi_powersave_off=${settings.wifiPowersaveOff}, wifi_low_latency=${settings.wifiLowLatency}, wifi_hi_perf=${settings.wifiHiPerf}, data_low_latency=${settings.dataLowLatency}, wifi7_unlock=${settings.wifi7Unlock}`);
+		addLog(`应用设置: WiFi=${settings.wifiAlgorithm}, WiFi_qdisc=${settings.wifiQdisc}, Cellular=${settings.cellularAlgorithm}, Cellular_qdisc=${settings.cellularQdisc}, Kill=${settings.killOnChange}, initcwnd_initrwnd=${settings.setInitcwndInitrwndOnChange} (initcwnd=${settings.initcwndValue}, initrwnd=${settings.initrwndValue}), data_low_latency=${settings.dataLowLatency}`);
 		return 0;
 	} catch (error) {
 		console.error('Error applying settings:', error);

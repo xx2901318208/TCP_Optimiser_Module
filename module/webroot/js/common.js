@@ -200,6 +200,8 @@ export async function get_private_dns_state() {
 // hosts 去广告的实际生效状态：只看 /proc/mounts，不看开关选了什么。
 // ours = 我们的列表正挂着；other = 别的工具（AdAway 等）占着位置；
 // none = 没挂。开关开了但这里显示“未开启”，就是挂载没成功。
+// 奖励开关开着时，比的是去掉奖励域名后的有效文件（hosts.effective），
+// 不是 hosts 本身——不然会把自己的挂载误认成别的工具占了位置。
 export async function get_hosts_block_state() {
 	// /proc/mounts 认不出文件 bind 挂载（只显示块设备 dm-39），改用内容判断：
 	// /system/etc/hosts 和模块 hosts 文件 md5 一致 = 我们的挂载在生效；
@@ -207,11 +209,13 @@ export async function get_hosts_block_state() {
 	// 2026-11-15 真机确认：旧逻辑会把自己的挂载误报成“被其他工具占用”。
 	try {
 		const dir = router_state.moduleInformation.moduleDir;
-		const { stdout } = await exec(`st=none
+		const { stdout } = await exec(`eff="${dir}/hosts"
+if [ -f "${dir}/adblock_reward" ] && [ -f "${dir}/hosts.effective" ]; then eff="${dir}/hosts.effective"; fi
+st=none
 if command -v md5sum >/dev/null 2>&1; then
-a=$(md5sum /system/etc/hosts 2>/dev/null | awk '{print $1}'); b=$(md5sum "${dir}/hosts" 2>/dev/null | awk '{print $1}'); [ -n "$a" ] && [ "$a" = "$b" ] && st=ours
+a=$(md5sum /system/etc/hosts 2>/dev/null | awk '{print $1}'); b=$(md5sum "$eff" 2>/dev/null | awk '{print $1}'); [ -n "$a" ] && [ "$a" = "$b" ] && st=ours
 else
-[ "$(wc -l < /system/etc/hosts 2>/dev/null)" = "$(wc -l < "${dir}/hosts" 2>/dev/null)" ] && head -n1 /system/etc/hosts 2>/dev/null | grep -q StevenBlack && st=ours
+[ "$(wc -l < /system/etc/hosts 2>/dev/null)" = "$(wc -l < "$eff" 2>/dev/null)" ] && head -n1 /system/etc/hosts 2>/dev/null | grep -qE "coolapk|StevenBlack" && st=ours
 fi
 if [ "$st" = none ]; then
 if grep -q " /system/etc/hosts " /proc/mounts 2>/dev/null; then st="other $(grep " /system/etc/hosts " /proc/mounts | head -n1 | awk '{print $1}')"; fi
@@ -219,7 +223,7 @@ fi
 echo "$st"`);
 		const token = stdout.trim();
 		if (token === 'ours') {
-			const { stdout: count } = await exec(`grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null`);
+			const { stdout: count } = await exec(`eff="${dir}/hosts"; if [ -f "${dir}/adblock_reward" ] && [ -f "${dir}/hosts.effective" ]; then eff="${dir}/hosts.effective"; fi; grep -c "^0\\.0\\.0\\.0" "$eff" 2>/dev/null`);
 			return { status: 'ours', rules: parseInt(count.trim(), 10) || 0 };
 		}
 		if (token.startsWith('other ')) {
@@ -235,15 +239,17 @@ echo "$st"`);
 export async function get_hosts_list_info() {
 	// 读模块 hosts 文件的版本（# Date: 头）和规则数，一次 shell 调用。
 	// Date 头形如 "14 November 2026 02:04:47 (UTC)"，只取前三个词当日期。
-	// 再读 # Title: 头，区分是哪个档位的列表（StevenBlack 还是 OISD Big）。
+	// GGAT 列表没有 "# Title:" 头：标题认第一行的 #@coolapk 作者头，
+	// 显示成“GGAT”；老列表有 "# Title:" 头的，仍按它显示。
+	// "# Date:" 头也可能没有，没有就返回空，页面只显示标题和规则数。
 	try {
 		const dir = router_state.moduleInformation.moduleDir;
-		const { stdout } = await exec(`t=$(grep -m1 '^# Title:' "${dir}/hosts" 2>/dev/null | sed 's/^# Title: *//'); d=$(grep -m1 '^# Date:' "${dir}/hosts" 2>/dev/null | sed 's/^# Date: *//'); c=$(grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null); echo "$t|$d|$c"`);
+		const { stdout } = await exec(`t=$(grep -m1 '^# Title:' "${dir}/hosts" 2>/dev/null | sed 's/^# Title: *//'); if [ -z "$t" ] && grep -qm1 '^#@coolapk' "${dir}/hosts" 2>/dev/null; then t="GGAT"; fi; d=$(grep -m1 '^# Date:' "${dir}/hosts" 2>/dev/null | sed 's/^# Date: *//'); c=$(grep -c "^0\\.0\\.0\\.0" "${dir}/hosts" 2>/dev/null); echo "$t|$d|$c"`);
 		const [titleRaw, dateRaw, countRaw] = stdout.trim().split('|');
 		const title = (titleRaw || '').trim();
 		const date = (dateRaw || '').split(' ').slice(0, 3).join(' ');
 		const rules = parseInt(countRaw, 10) || 0;
-		if (!date && !rules) return null;
+		if (!title && !date && !rules) return null;
 		return { title, date, rules };
 	} catch (error) {
 		console.error('Error fetching hosts list info:', error);

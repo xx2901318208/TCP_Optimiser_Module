@@ -670,27 +670,46 @@ apply_private_dns() {
 }
 
 # hosts 去广告（标记文件 adblock_hosts，默认不开）：
-# 开关打开时把模块自带的 hosts 列表（StevenBlack，广告+恶意域名）
+# 开关打开时把模块自带的 hosts 列表（GGAT，广告+恶意域名）
 # bind 挂载到 /system/etc/hosts；关掉时卸载恢复原样。
+# 广告奖励开关开着时，挂载的是去掉奖励域名后的有效文件
+# （hosts.effective），不是 hosts 本身——下面的判断都按有效文件来，
+# 不然会把自己的挂载误认成别的工具占了位置。
 # 注意：和 Private DNS 不要同时开，两者叠加优先级不明确。
 # 判断挂载不能看 /proc/mounts：文件 bind 挂载在里面只显示块设备
 # （这台机是 /dev/block/dm-39），永远看不到模块的文件路径——
 # 2026-11-15 真机确认：挂载明明成功了却报“挂载失败”，关开关也卸不掉。
 # 所以用内容判断：/system/etc/hosts 和模块 hosts 文件一致就是我们挂上的。
+# 真正该挂载的文件：奖励开关开着时是过滤后的 hosts.effective，
+# 关着时就是 hosts 本身。有效文件不存在或比 hosts 旧就重新生成一次。
+hosts_effective_file() {
+	if [ -f "$MODPATH/adblock_reward" ]; then
+		if [ ! -f "$MODPATH/hosts.effective" ] || [ "$MODPATH/hosts" -nt "$MODPATH/hosts.effective" ]; then
+			sh "$MODPATH/gen_effective_hosts.sh" 2>/dev/null
+		fi
+		echo "$MODPATH/hosts.effective"
+	else
+		echo "$MODPATH/hosts"
+	fi
+}
+
 hosts_block_active() {
+	local eff
 	[ -f /system/etc/hosts ] || return 1
 	[ -f "$MODPATH/hosts" ] || return 1
+	eff=$(hosts_effective_file)
+	[ -f "$eff" ] || return 1
 	# 首选整文件比对（AdAway 即使用同款列表，构建日期/条目也不同）
 	if command -v md5sum >/dev/null 2>&1; then
 		local a b
 		a=$(md5sum /system/etc/hosts 2>/dev/null | awk '{print $1}')
-		b=$(md5sum "$MODPATH/hosts" 2>/dev/null | awk '{print $1}')
+		b=$(md5sum "$eff" 2>/dev/null | awk '{print $1}')
 		[ -n "$a" ] && [ "$a" = "$b" ] && return 0
 		return 1
 	fi
 	# 退路：行数 + 标题一致
-	[ "$(wc -l < /system/etc/hosts 2>/dev/null)" = "$(wc -l < "$MODPATH/hosts" 2>/dev/null)" ] \
-		&& head -n 1 /system/etc/hosts 2>/dev/null | grep -q "StevenBlack"
+	[ "$(wc -l < /system/etc/hosts 2>/dev/null)" = "$(wc -l < "$eff" 2>/dev/null)" ] \
+		&& head -n 1 /system/etc/hosts 2>/dev/null | grep -qE "coolapk|StevenBlack"
 }
 
 apply_hosts_block() {
@@ -709,9 +728,16 @@ apply_hosts_block() {
 			log_print "[!] /system/etc/hosts 已被其他工具挂载，hosts 去广告未启用（请先关掉 AdAway / Systemless Hosts）"
 			return 0
 		fi
-		mount --bind "$MODPATH/hosts" /system/etc/hosts 2>/dev/null
+		# 先把有效文件生成好（奖励开关开着时去掉奖励域名），再挂载它
+		local eff
+		eff=$(hosts_effective_file)
+		mount --bind "$eff" /system/etc/hosts 2>/dev/null
 		if hosts_block_active; then
-			log_print " [+] hosts 去广告已开启（StevenBlack，$(grep -c "^0\.0\.0\.0" "$MODPATH/hosts" 2>/dev/null) 条规则）"
+			if [ -f "$MODPATH/adblock_reward" ]; then
+				log_print " [+] hosts 去广告已开启（GGAT，$(grep -c "^0\.0\.0\.0" "$eff" 2>/dev/null) 条规则；广告奖励开关开着，奖励域名已放行）"
+			else
+				log_print " [+] hosts 去广告已开启（GGAT，$(grep -c "^0\.0\.0\.0" "$eff" 2>/dev/null) 条规则）"
+			fi
 		else
 			log_print "[!] hosts 去广告挂载失败"
 		fi
@@ -735,6 +761,233 @@ apply_hosts_block() {
 	fi
 }
 
+# 把一个广告/日志文件夹或文件换成空的锁死文件（chmod 000），
+# 让广告 SDK 写不进去。根目录本身绝不动，只动里面的东西。
+_lock_123pan_path() {
+	local _p="$1"
+	case "$_p" in
+		""|"/"|"/data"|"/data/"|"/data/user"|"/data/user/"|"/data/user/0"|"/data/user/0/"|"/data/media"|"/data/media/0"|"/sdcard"|"/sdcard/"|"/storage"|"/storage/emulated/0"|"/sdcard/Android"|"/sdcard/Android/data") return 0 ;;
+	esac
+	[ -e "$_p" ] || return 0
+	rm -rf "$_p" 2>/dev/null
+	mkdir -p "${_p%/*}" 2>/dev/null
+	touch "$_p" 2>/dev/null
+	chmod 000 "$_p" 2>/dev/null
+}
+
+# 123云盘去广告（标记文件 adblock_123pan，默认不开，在去广告页打开）：
+# 把 123云盘里各家广告 SDK（广点通、百度、穿山甲、快手、倍孜、美数、
+# 支付宝）的组件停掉，再把广告/日志文件夹和日志文件换成空的锁死文件，
+# 免得 SDK 又写回来。没装 123云盘就什么都不做；单个组件停用失败
+# （比如新版改了组件名）也不影响别的，该停的照常停。
+# 关掉开关时尽量把组件重新启用、把锁死的文件夹恢复（失败也不报错）。
+# 组件清单按 GGAT_10007 的 123pan 做法原样搬过来。
+# 为了不拖慢主循环（74 次 pm 调用 + 两轮文件扫描），只在需要时跑：
+# 开关开着且没应用过、或开关文件比上次应用新时才停用；开关关了且
+# 之前应用过时才恢复；平时直接返回。点“应用”会刷新开关文件，
+# 所以想重新应用一次，点一下应用就行。
+apply_123pan_block() {
+	local pkg="com.mfcloudcalculate.networkdisk"
+	local comp="" _root="" _p=""
+	local state_file="$MODPATH/.123pan_applied"
+	# 没装 123云盘：静默跳过，别的设置照常应用
+	pm list packages "$pkg" 2>/dev/null | grep -qF "$pkg" || return 0
+	if [ -f "$MODPATH/adblock_123pan" ]; then
+		# 已经应用过、且开关文件没动过：不用重复停用
+		[ -f "$state_file" ] && [ ! "$MODPATH/adblock_123pan" -nt "$state_file" ] && return 0
+		disable_list='
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$RequestInstallPermissionActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.comm.GDTFileProvider
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.SdkInterstitialActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.GdtPrivacyActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuDownloadDetailActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuRewardVideoPlayerActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuWebviewActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.core.webview.TaskCenterWebActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.meishu_ad.view.DownLoadDialogActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuAlertDialogActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuDetailActivity
+com.mfcloudcalculate.networkdisk/com.beizi.ad.DownloadService
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.BdFileProvider
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.AppActivity
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.MobRewardVideoActivity
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.MobCPUDramaActivity
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.BdShellActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.comm.DownloadService
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.ADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.PortraitADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.LandscapeADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.RewardvideoPortraitADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.RewardvideoLandscapeADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.DialogActivity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Portrait_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Activity_T
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Landscape_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_SingleTask_Activity_T
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_SingleTask_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.server.DownloaderServerManager
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.AdWebViewActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KsFullScreenVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KsFullScreenLandScapeVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KsRewardVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KSRewardLandScapeVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.FeedDownloadActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$KsTrendsActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$ProfileHomeActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$ProfileVideoDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$TubeProfileActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$ChannelDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$TubeDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$EpisodeDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$GoodsPlayBackActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity3
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity4
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity5
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity6
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity7
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity8
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity9
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity10
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleTop1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleTop2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleInstance1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleInstance2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$DeveloperConfigActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTop1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTop2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTask1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTask2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleInstance1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleInstance2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.FileDownloadService$SharedMainProcessService
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.FileDownloadService$SeparateProcessService
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.DownloadService
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.ServiceProxyRemote
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.AdSdkFileProvider
+com.mfcloudcalculate.networkdisk/com.alipay.mobile.logmonitor.ClientMonitorExtReceiver
+'
+		for comp in $disable_list; do
+			pm disable "$comp" >/dev/null 2>&1
+		done
+		# 广告/日志文件夹和日志文件：只动 123云盘自己的两个数据目录
+		for _root in "/sdcard/Android/data/$pkg" "/data/user/0/$pkg"; do
+			[ -d "$_root" ] || continue
+			find "$_root" \( -iname '*logcat*' -o -iname 'BeiZi' -o -iname 'applog' -o -iname 'AMPS' -o -iname 'crashsdk' -o -iname 'app_baidu_sdk_remote' -o -iname 'app_adnet' -o -iname 'app_e_qq_com_*' -o -iname 'ks_union' -o -iname 'ksad_dynamic' -o -iname 'kwad_ex' \) -type d 2>/dev/null | while IFS= read -r _p; do
+				_lock_123pan_path "$_p"
+			done
+			find "$_root" \( -iname '*crash*' -o -iname '*.log' -o -iname '*.xlog' -o -iname '*.logs' \) -type f 2>/dev/null | while IFS= read -r _p; do
+				_lock_123pan_path "$_p"
+			done
+		done
+		touch "$state_file" 2>/dev/null
+		log_print " [+] 123云盘去广告已开启"
+	else
+		# 开关关了：之前没应用过就没什么可恢复的
+		[ -f "$state_file" ] || return 0
+		disable_list='
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$RequestInstallPermissionActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.comm.GDTFileProvider
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.SdkInterstitialActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.GdtPrivacyActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuDownloadDetailActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuRewardVideoPlayerActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuWebviewActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.core.webview.TaskCenterWebActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.meishu_ad.view.DownLoadDialogActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuAlertDialogActivity
+com.mfcloudcalculate.networkdisk/com.meishu.sdk.activity.MeishuDetailActivity
+com.mfcloudcalculate.networkdisk/com.beizi.ad.DownloadService
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.BdFileProvider
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.AppActivity
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.MobRewardVideoActivity
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.MobCPUDramaActivity
+com.mfcloudcalculate.networkdisk/com.baidu.mobads.sdk.api.BdShellActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.comm.DownloadService
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.ADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.PortraitADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.LandscapeADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.RewardvideoPortraitADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.RewardvideoLandscapeADActivity
+com.mfcloudcalculate.networkdisk/com.qq.e.ads.DialogActivity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Portrait_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Activity_T
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Standard_Landscape_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_SingleTask_Activity_T
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.activity.Stub_SingleTask_Activity
+com.mfcloudcalculate.networkdisk/com.bytedance.sdk.openadsdk.stub.server.DownloaderServerManager
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.AdWebViewActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KsFullScreenVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KsFullScreenLandScapeVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KsRewardVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.KSRewardLandScapeVideoActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.FeedDownloadActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$KsTrendsActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$ProfileHomeActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$ProfileVideoDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$TubeProfileActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$ChannelDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$TubeDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$EpisodeDetailActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$GoodsPlayBackActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity3
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity4
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity5
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity6
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity7
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity8
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity9
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivity10
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleTop1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleTop2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleInstance1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$FragmentActivitySingleInstance2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$DeveloperConfigActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivity
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTop1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTop2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTask1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleTask2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleInstance1
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.BaseFragmentActivity$LandscapeFragmentActivitySingleInstance2
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.FileDownloadService$SharedMainProcessService
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.FileDownloadService$SeparateProcessService
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.DownloadService
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.ServiceProxyRemote
+com.mfcloudcalculate.networkdisk/com.kwad.sdk.api.proxy.app.AdSdkFileProvider
+com.mfcloudcalculate.networkdisk/com.alipay.mobile.logmonitor.ClientMonitorExtReceiver
+'
+		for comp in $disable_list; do
+			pm enable "$comp" >/dev/null 2>&1
+		done
+		# 锁死的文件夹/文件也尽量恢复：锁死的是空的 000 文件，删掉它，
+		# 文件夹再重建一个空目录（应用自己也会重建）；不是空的就不动。
+		for _root in "/sdcard/Android/data/$pkg" "/data/user/0/$pkg"; do
+			[ -d "$_root" ] || continue
+			find "$_root" \( -iname '*logcat*' -o -iname 'BeiZi' -o -iname 'applog' -o -iname 'AMPS' -o -iname 'crashsdk' -o -iname 'app_baidu_sdk_remote' -o -iname 'app_adnet' -o -iname 'app_e_qq_com_*' -o -iname 'ks_union' -o -iname 'ksad_dynamic' -o -iname 'kwad_ex' \) 2>/dev/null | while IFS= read -r _p; do
+				if [ -f "$_p" ] && [ ! -s "$_p" ]; then
+					rm -f "$_p" 2>/dev/null
+					mkdir -p "$_p" 2>/dev/null
+				elif [ -d "$_p" ]; then
+					chmod 755 "$_p" 2>/dev/null
+				fi
+			done
+			find "$_root" \( -iname '*crash*' -o -iname '*.log' -o -iname '*.xlog' -o -iname '*.logs' \) -type f 2>/dev/null | while IFS= read -r _p; do
+				[ -f "$_p" ] && [ ! -s "$_p" ] && rm -f "$_p" 2>/dev/null
+			done
+		done
+		rm -f "$state_file" 2>/dev/null
+		log_print " [+] 123云盘去广告已关闭"
+	fi
+}
 # 网络质量检测（只读：只测、只记日志，绝不据此改 sysctl）
 # 之前这里会按 ping 延迟改 tcp_fastopen/autocorking，还会把 tcp_rmem
 # 写成单个值 16384（这个文件要三个值）—— 2026-11-13 起全部删掉。
@@ -794,6 +1047,8 @@ while true; do
 			apply_private_dns
 			# hosts 去广告同样和接口无关
 			apply_hosts_block
+			# 123云盘去广告同样和接口无关（有标记才做，没标记是还原）
+			apply_123pan_block
 			# Wi-Fi 7 解锁同样和接口无关（有标记才做，没标记是还原）
 			apply_wifi7_unlock
 			# Wi-Fi 低延迟同样和接口无关（有标记才开，没标记是关掉）

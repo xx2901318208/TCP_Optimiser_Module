@@ -11,18 +11,6 @@ const PRIVATE_DNS_OPTIONS = [
 	{ value: "dot.pub", label: "腾讯 DNSPod（国内快）" },
 ];
 
-async function fetchHostsTier() {
-	// 读 hosts_tier 文件（内容是 stevenblack 或 oisd）；没有/读不到/写错了就用标准档
-	try {
-		const dir = router_state.moduleInformation.moduleDir;
-		const { stdout } = await exec(`cat "${dir}/hosts_tier" 2>/dev/null`);
-		const tier = (stdout || '').trim();
-		return (tier === 'oisd' || tier === 'stevenblack') ? tier : 'stevenblack';
-	} catch (error) {
-		return 'stevenblack';
-	}
-}
-
 async function populatePrivateDnsDropdown(dropdown) {
 	// 同设置页：先等值回来再清选项，等待期间保留“正在加载选项”占位
 	var value = router_state.adblockPageParams.privateDns == null ? await fetchPrivateDnsMarker() : router_state.adblockPageParams.privateDns;
@@ -54,14 +42,19 @@ async function populatePrivateDnsDropdown(dropdown) {
 
 export async function initAdblock() {
 	const adblockHosts = document.getElementById('adblock-hosts');
+	const adblock123pan = document.getElementById('adblock-123pan');
+	const adblockReward = document.getElementById('adblock-reward');
 	const privateDns = document.getElementById('private-dns');
-	const hostsTier = document.getElementById('hosts-tier');
 	const applyBtn = document.getElementById('apply');
 	const updateHostsBtn = document.getElementById('update-hosts');
 	const updateHostsStatus = document.getElementById('hosts-update-status');
 
 	if(router_state.adblockPageParams.adblockHosts == null)
 		router_state.adblockPageParams.adblockHosts = await fetchIsConfigFile("adblock_hosts");
+	if(router_state.adblockPageParams.adblock123pan == null)
+		router_state.adblockPageParams.adblock123pan = await fetchIsConfigFile("adblock_123pan");
+	if(router_state.adblockPageParams.adblockReward == null)
+		router_state.adblockPageParams.adblockReward = await fetchIsConfigFile("adblock_reward");
 
 	// 实际生效状态和下拉框一起读：开关只代表“你选了什么”，这里显示
 	// 的才是手机上真正生效的——hosts 看挂载，Private DNS 看系统设置。
@@ -70,14 +63,16 @@ export async function initAdblock() {
 		refreshHostsListInfo(),
 		populatePrivateDnsDropdown(privateDns),
 	]);
-	if (hostsTier) hostsTier.value = await fetchHostsTier();
 	adblockHosts.checked = router_state.adblockPageParams.adblockHosts;
+	if (adblock123pan) adblock123pan.checked = router_state.adblockPageParams.adblock123pan;
+	if (adblockReward) adblockReward.checked = router_state.adblockPageParams.adblockReward;
 
 	async function applyAdblockSettings() {
 		const settings = {
 			adblockHosts: adblockHosts.checked,
+			adblock123pan: adblock123pan ? adblock123pan.checked : false,
+			adblockReward: adblockReward ? adblockReward.checked : false,
 			privateDns: privateDns.value,
-			hostsTier: hostsTier ? hostsTier.value : 'stevenblack',
 		};
 
 		try
@@ -101,11 +96,15 @@ export async function initAdblock() {
 
 			// 和设置页一样：删旧标记、写新标记各合并成一条命令，少等几次 shell。
 			const dir = router_state.moduleInformation.moduleDir;
-			await exec(`rm -f ${dir}/adblock_hosts ${dir}/private_dns_*`);
+			await exec(`rm -f ${dir}/adblock_hosts ${dir}/adblock_123pan ${dir}/adblock_reward ${dir}/private_dns_*`);
 
 			const touches = [];
 			if(settings.adblockHosts)
 				touches.push(`touch ${dir}/adblock_hosts && chmod 644 ${dir}/adblock_hosts`);
+			if(settings.adblock123pan)
+				touches.push(`touch ${dir}/adblock_123pan && chmod 644 ${dir}/adblock_123pan`);
+			if(settings.adblockReward)
+				touches.push(`touch ${dir}/adblock_reward && chmod 644 ${dir}/adblock_reward`);
 
 			if(settings.privateDns && settings.privateDns != "off")
 				touches.push(`touch ${dir}/private_dns_${settings.privateDns} && chmod 644 ${dir}/private_dns_${settings.privateDns}`);
@@ -113,16 +112,14 @@ export async function initAdblock() {
 			if(touches.length > 0)
 				await exec(touches.join(' ; '));
 
-			// 档位也写进 hosts_tier 文件（更新按钮和模块更新恢复都认它）；
-			// 换档位本身不下载新列表，点“更新 hosts 列表”才下载。
-			await exec(`echo "${settings.hostsTier}" > ${dir}/hosts_tier && chmod 644 ${dir}/hosts_tier`);
-
 			console.log('Applied adblock settings:', settings);
 
 			router_state.adblockPageParams.adblockHosts = settings.adblockHosts;
+			router_state.adblockPageParams.adblock123pan = settings.adblock123pan;
+			router_state.adblockPageParams.adblockReward = settings.adblockReward;
 			router_state.adblockPageParams.privateDns = settings.privateDns;
 			toast("设置已成功应用！");
-			addLog(`应用去广告设置: adblock_hosts=${settings.adblockHosts}, private_dns=${settings.privateDns}, hosts_tier=${settings.hostsTier}`);
+			addLog(`应用去广告设置: adblock_hosts=${settings.adblockHosts}, adblock_123pan=${settings.adblock123pan}, adblock_reward=${settings.adblockReward}, private_dns=${settings.privateDns}`);
 			return 0;
 		} catch (error) {
 			console.error('Error applying adblock settings:', error);
@@ -147,19 +144,19 @@ export async function initAdblock() {
 		}
 	});
 
-	// 更新 hosts 列表：手机直接从所选档位的上游下载最新版（标准档是
-	// StevenBlack，下下来就是 hosts 格式；更强档是 OISD Big，下下来是
-	// Adblock 格式，update_hosts.sh 先校验再转成 hosts 格式），
-	// 校验（不是认得的来源 / 有可疑 IP / 不完整就保留旧列表）、备份旧
-	// 列表、替换、去广告开着就重新挂载。下载要几秒，期间把按钮锁住，免得重复点。
+	// 更新 hosts 列表：手机直接从上游拉最新版 GGAT 列表
+	// （读作者的 update.json → 下载模块包 → 解出 hosts → 去掉跳转条目），
+	// 再校验（不是认得的来源 / 有可疑 IP / 不完整就保留旧列表）、
+	// 备份旧列表、替换、去广告开着就重新挂载。
+	// 奖励开关开着时，挂上去的是去掉奖励域名后的版本。下载要几秒，
+	// 期间把按钮锁住，免得重复点。
 	if (updateHostsBtn) {
 		updateHostsBtn.addEventListener('click', async () => {
 			updateHostsBtn.disabled = true;
 			if (updateHostsStatus) updateHostsStatus.textContent = '正在从上游下载最新列表…';
 			try {
 				const dir = router_state.moduleInformation.moduleDir;
-				const tier = (hostsTier && hostsTier.value) ? hostsTier.value : 'stevenblack';
-				const { stdout } = await exec(`sh ${dir}/update_hosts.sh ${tier}`);
+				const { stdout } = await exec(`sh ${dir}/update_hosts.sh`);
 				const firstLine = (stdout || '').trim().split('\n')[0] || '';
 				if (firstLine.startsWith('OK|')) {
 					const [, date, rules] = firstLine.split('|');
@@ -219,15 +216,19 @@ async function refreshAdblockStatus() {
 	}
 }
 
-// 读模块 hosts 文件的版本（# Date: 头）和规则数，显示在页面顶部。
-// 再读 # Title: 头，区分是哪个档位的列表（StevenBlack 还是 OISD Big）。
+// 读模块 hosts 文件的版本和规则数，显示在页面顶部。
+// GGAT 列表没有 "# Title:" 头，标题就认第一行的 #@coolapk 作者头；
+// "# Date:" 头也可能没有，没有就不显示日期，只显示标题和规则数。
 async function refreshHostsListInfo() {
 	try {
 		const info = await get_hosts_list_info();
 		const infoEl = document.getElementById('hosts-list-info');
 		if (!infoEl) return;
 		if (info) {
-			infoEl.textContent = info.title ? `${info.title}，${info.date}（${info.rules} 条规则）` : `${info.date}（${info.rules} 条规则）`;
+			const parts = [];
+			if (info.title) parts.push(info.title);
+			if (info.date) parts.push(info.date);
+			infoEl.textContent = `${parts.join('，')}（${info.rules} 条规则）`;
 		} else {
 			infoEl.textContent = '读取失败';
 		}

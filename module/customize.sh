@@ -32,7 +32,7 @@ MODULE_PATH="/data/adb/modules/$MODULE_NAME"
 OLD_MODULE_PATH="/data/adb/modules/tcp_optimiser"
 if [ -d "$OLD_MODULE_PATH" ] && [ "$OLD_MODULE_PATH" != "$MODPATH" ] && [ "$OLD_MODULE_PATH" != "$MODULE_PATH" ]; then
     ui_print " [+] 检测到老模块 tcp_optimiser，正在迁移设置到 K-network..."
-    for f in adblock_hosts wifi7_unlock initcwnd_value initrwnd_value wifi_powersave_off wifi_low_latency wifi_hi_perf data_low_latency dns_applied hosts.bak; do
+    for f in adblock_hosts adblock_123pan adblock_reward wifi7_unlock initcwnd_value initrwnd_value wifi_powersave_off wifi_low_latency wifi_hi_perf data_low_latency dns_applied hosts.bak; do
         if [ -f "$OLD_MODULE_PATH/$f" ]; then
             cp -a "$OLD_MODULE_PATH/$f" "$MODPATH/" 2>/dev/null
         fi
@@ -187,21 +187,26 @@ cp "$MODDIR/module.prop.bak" "$MODDIR/module.prop"
 EOF
 chmod +x /data/adb/post-fs-data.d/k-network.sh
 
-# hosts 列表档位：模块更新会把自带的 hosts（StevenBlack）盖回来。
-# 如果用户之前下载过列表（update_hosts.sh 成功时会另存一份
-# hosts.saved.<档位>，不在安装包里，更新时不会被盖掉），用保存的那份
-# 恢复。KSU 更新时旧模块在 MODULE_PATH，新模块在 MODPATH，两边都找。
-TIER_RESTORE=""
-for _d in "$MODPATH" "$MODULE_PATH"; do
-    [ -f "$_d/hosts_tier" ] && TIER_RESTORE=$(cat "$_d/hosts_tier" 2>/dev/null | tr -d ' \t\r\n') && break
-done
-[ -z "$TIER_RESTORE" ] && TIER_RESTORE="stevenblack"
+# hosts 列表：模块更新会把自带的 hosts（GGAT）盖回来。
+# 如果用户之前点“更新 hosts 列表”下载过新版（update_hosts.sh 成功时
+# 会另存一份 hosts.saved，不在安装包里，更新时不会被盖掉），用保存的
+# 那份恢复。KSU 更新时旧模块在 MODULE_PATH，新模块在 MODPATH，两边都找。
+# 只有一个列表，没有档位；老版本留下的 hosts_tier / hosts.saved.<档位>
+# 直接忽略，不再恢复（旧的 StevenBlack 列表不再用）。
 SAVED_HOSTS=""
 for _d in "$MODPATH" "$MODULE_PATH"; do
-    [ -f "$_d/hosts.saved.$TIER_RESTORE" ] && SAVED_HOSTS="$_d/hosts.saved.$TIER_RESTORE" && break
+    [ -f "$_d/hosts.saved" ] && SAVED_HOSTS="$_d/hosts.saved" && break
 done
 if [ -n "$SAVED_HOSTS" ]; then
     cp -f "$SAVED_HOSTS" "$MODPATH/hosts" 2>/dev/null
-    cp -f "$SAVED_HOSTS" "$MODPATH/hosts.saved.$TIER_RESTORE" 2>/dev/null
-    ui_print " [+] 已恢复下载过的 hosts 列表（$TIER_RESTORE 档）"
+    cp -f "$SAVED_HOSTS" "$MODPATH/hosts.saved" 2>/dev/null
+    ui_print " [+] 已恢复下载过的 hosts 列表"
 fi
+
+# 123云盘去广告 / 广告奖励开关：标记文件不在安装包里，更新时从旧模块
+# 目录拷回来（KSU 更新时旧模块在 MODULE_PATH）。
+for _f in adblock_123pan adblock_reward; do
+    if [ ! -f "$MODPATH/$_f" ] && [ -f "$MODULE_PATH/$_f" ]; then
+        cp -f "$MODULE_PATH/$_f" "$MODPATH/$_f" 2>/dev/null
+    fi
+done

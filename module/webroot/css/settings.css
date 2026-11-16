@@ -14,7 +14,7 @@
   flex: 1;
 }
 
-#kill-connections-label, #initcwnd-initrwnd-label, #wifi-powersave-off-label, #wifi7-unlock-label {
+#kill-connections-label, #initcwnd-initrwnd-label {
   color: var(--text-secondary);
 }
 
