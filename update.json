@@ -1,6 +1,6 @@
 {
-  "changelog": "https://raw.githubusercontent.com/xx2901318208/TCP_Optimiser_Module/main/CHANGELOG.md",
-  "version": "4.28",
-  "versionCode": 45,
-  "zipUrl": "https://github.com/xx2901318208/TCP_Optimiser_Module/releases/download/v4.28/TCP_Optimiser-4.28-45.zip"
+  "changelog": "https://cdn.jsdelivr.net/gh/xx2901318208/TCP_Optimiser_Module@main/CHANGELOG.md",
+  "version": "4.30",
+  "versionCode": 47,
+  "zipUrl": "https://github.com/xx2901318208/TCP_Optimiser_Module/releases/download/v4.30/TCP_Optimiser-4.30-47.zip"
 }
